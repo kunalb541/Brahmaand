@@ -300,6 +300,24 @@ aboutPanel.addEventListener('click', (e) => {
   if (e.target === aboutPanel || (e.target as HTMLElement).id === 'about-close') aboutPanel.style.display = 'none';
 });
 
+// --- Collapsible HUD (tap title) — keeps controls out of the way on small/touch screens ---
+const hudEl = document.getElementById('hud')!;
+const hudTitle = hudEl.querySelector('h1') as HTMLElement;
+hudTitle.style.cursor = 'pointer';
+hudTitle.title = 'tap to collapse/expand controls';
+let hudCollapsed = window.innerWidth < 560; // start collapsed on phones
+function applyHudCollapsed(): void {
+  for (const c of Array.from(hudEl.children)) {
+    if (c !== hudTitle) (c as HTMLElement).style.display = hudCollapsed ? 'none' : '';
+  }
+  hudTitle.textContent = hudCollapsed ? '★ ▾' : '★ STAR ATLAS';
+}
+hudTitle.addEventListener('click', () => {
+  hudCollapsed = !hudCollapsed;
+  applyHudCollapsed();
+});
+applyHudCollapsed();
+
 // --- Service worker (offline shell + cached assets/tiles) — production only ---
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));

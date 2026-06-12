@@ -18,6 +18,10 @@ export class LookControls {
   private dragging = false;
   private lastX = 0;
   private lastY = 0;
+  // multi-touch (pinch-to-zoom on mobile/iOS)
+  private pointers = new Map<number, { x: number; y: number }>();
+  private pinchDist = 0;
+  private pinchFov = 0;
   private readonly damping = 6;
   private readonly minFov = 0.5;
   private readonly maxFov = 100;
@@ -40,13 +44,37 @@ export class LookControls {
   ) {
     dom.style.touchAction = 'none';
     dom.addEventListener('pointerdown', (e) => {
-      this.dragging = true;
-      this.animating = false; // a manual drag cancels any fly-to
-      this.lastX = e.clientX;
-      this.lastY = e.clientY;
-      dom.setPointerCapture(e.pointerId);
+      this.animating = false; // a manual gesture cancels any fly-to
+      this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (this.pointers.size === 1) {
+        this.dragging = true;
+        this.lastX = e.clientX;
+        this.lastY = e.clientY;
+        dom.setPointerCapture(e.pointerId);
+      } else if (this.pointers.size === 2) {
+        this.dragging = false; // two fingers = pinch-zoom, not look
+        this.pinchDist = this.pointerDist();
+        this.pinchFov = this.fovDeg;
+      }
     });
     dom.addEventListener('pointermove', (e) => {
+      const p = this.pointers.get(e.pointerId);
+      if (p) {
+        p.x = e.clientX;
+        p.y = e.clientY;
+      }
+      if (this.pointers.size >= 2) {
+        // pinch → FOV (fingers apart = zoom in = smaller FOV)
+        const d = this.pointerDist();
+        if (d > 0 && this.pinchDist > 0) {
+          this.fovDeg = THREE.MathUtils.clamp(
+            (this.pinchFov * this.pinchDist) / d,
+            this.minFov,
+            this.maxFov,
+          );
+        }
+        return;
+      }
       if (!this.dragging) return;
       const radPerPx = (this.fovDeg * Math.PI) / 180 / dom.clientHeight;
       const dx = (e.clientX - this.lastX) * radPerPx;
@@ -59,12 +87,22 @@ export class LookControls {
       this.velPitch = dy * 60;
       this.clampPitch();
     });
-    const endDrag = (e: PointerEvent) => {
-      this.dragging = false;
+    const endPointer = (e: PointerEvent) => {
+      this.pointers.delete(e.pointerId);
       if (dom.hasPointerCapture?.(e.pointerId)) dom.releasePointerCapture(e.pointerId);
+      if (this.pointers.size === 0) {
+        this.dragging = false;
+      } else if (this.pointers.size === 1) {
+        // pinch ended; resume look from the remaining finger
+        const [only] = this.pointers.values();
+        this.dragging = true;
+        this.lastX = only!.x;
+        this.lastY = only!.y;
+        this.velYaw = this.velPitch = 0;
+      }
     };
-    dom.addEventListener('pointerup', endDrag);
-    dom.addEventListener('pointercancel', endDrag);
+    dom.addEventListener('pointerup', endPointer);
+    dom.addEventListener('pointercancel', endPointer);
     dom.addEventListener(
       'wheel',
       (e) => {
@@ -142,5 +180,14 @@ export class LookControls {
   private clampPitch(): void {
     const lim = Math.PI / 2 - 0.002;
     this.pitch = THREE.MathUtils.clamp(this.pitch, -lim, lim);
+  }
+
+  /** Screen-space distance between the first two active pointers (for pinch). */
+  private pointerDist(): number {
+    const it = this.pointers.values();
+    const a = it.next().value;
+    const b = it.next().value;
+    if (!a || !b) return 0;
+    return Math.hypot(a.x - b.x, a.y - b.y);
   }
 }

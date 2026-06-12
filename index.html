@@ -2,7 +2,9 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>Star Atlas — real-imagery sky</title>
     <style>
       :root { color-scheme: dark; }
@@ -10,7 +12,8 @@
       body { font-family: ui-monospace, "SF Mono", Menlo, monospace; color: #cfe3ff; }
       canvas { display: block; }
       #hud {
-        position: fixed; top: 10px; left: 10px; z-index: 10;
+        position: fixed;
+        top: calc(10px + env(safe-area-inset-top)); left: calc(10px + env(safe-area-inset-left)); z-index: 10;
         background: rgba(6, 12, 24, 0.62); border: 1px solid rgba(120,170,255,.18);
         border-radius: 10px; padding: 10px 12px; font-size: 12px; line-height: 1.5;
         backdrop-filter: blur(6px); max-width: 280px;
@@ -25,7 +28,7 @@
       #hud button.active { background: rgba(90,140,230,.7); border-color: #9cc4ff; }
       #hud .hint { color: #7f93b5; font-size: 10.5px; margin-top: 8px; }
       #attrib {
-        position: fixed; bottom: 8px; right: 10px; z-index: 10; text-align: right;
+        position: fixed; bottom: calc(8px + env(safe-area-inset-bottom)); right: 10px; z-index: 10; text-align: right;
         font-size: 10px; color: #6f86ab; max-width: 60vw;
       }
       #attrib a { color: #8aa6d6; }
