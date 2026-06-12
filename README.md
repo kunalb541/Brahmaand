@@ -184,3 +184,10 @@ UNVERIFIED/derived claims. Design docs carry forward unresolved items as explici
 - **Attribution is mandatory**: DSS2 (STScI acknowledgment), ESA/Gaia/DPAC (CC BY-SA 3.0 IGO),
   Rubin First Look (ODbL-1.0, RubinObs/NOIRLab/SLAC/NSF/DOE/AURA), CDS services, broker credits.
   The UI must display `obs_copyright` strings from HiPS `properties` files.
+
+## License
+
+Source code: **MIT** ([LICENSE](LICENSE)). Bundled data and imagery carry their own provider
+licenses (HYG catalogue CC BY-SA 4.0; DSS2/STScI; Mellinger panorama non-commercial; constellation
+lines BSD-3) — see **[DATA-LICENSES.md](DATA-LICENSES.md)** for full attribution and the implications
+for public/commercial use.
