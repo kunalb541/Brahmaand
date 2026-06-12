@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Star Atlas — real-imagery sky</title>
+    <style>
+      :root { color-scheme: dark; }
+      html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+      body { font-family: ui-monospace, "SF Mono", Menlo, monospace; color: #cfe3ff; }
+      canvas { display: block; }
+      #hud {
+        position: fixed; top: 10px; left: 10px; z-index: 10;
+        background: rgba(6, 12, 24, 0.62); border: 1px solid rgba(120,170,255,.18);
+        border-radius: 10px; padding: 10px 12px; font-size: 12px; line-height: 1.5;
+        backdrop-filter: blur(6px); max-width: 280px;
+      }
+      #hud h1 { font-size: 13px; margin: 0 0 6px; letter-spacing: .04em; color: #9cc4ff; }
+      #hud .row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+      #hud button {
+        font: inherit; font-size: 11px; cursor: pointer; color: #dcebff;
+        background: rgba(40,70,130,.45); border: 1px solid rgba(120,170,255,.3);
+        border-radius: 6px; padding: 4px 8px;
+      }
+      #hud button.active { background: rgba(90,140,230,.7); border-color: #9cc4ff; }
+      #hud .hint { color: #7f93b5; font-size: 10.5px; margin-top: 8px; }
+      #attrib {
+        position: fixed; bottom: 8px; right: 10px; z-index: 10; text-align: right;
+        font-size: 10px; color: #6f86ab; max-width: 60vw;
+      }
+      #attrib a { color: #8aa6d6; }
+      #vrbtn { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); z-index: 10; }
+      #loading {
+        position: fixed; inset: 0; display: grid; place-items: center; z-index: 20;
+        background: #000; color: #9cc4ff; font-size: 13px; transition: opacity .5s; pointer-events: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="loading">Loading real survey imagery…</div>
+    <div id="hud">
+      <h1>★ STAR ATLAS</h1>
+      <div id="readout">RA --h --m&nbsp;&nbsp;Dec ±--° --′</div>
+      <div class="row" id="surveys"></div>
+      <div class="row">
+        <button id="toggle-const" class="active">Constellations</button>
+        <button id="toggle-stars" class="active">Star labels</button>
+      </div>
+      <div class="hint">Drag to look · scroll to zoom · real photographic sky</div>
+    </div>
+    <div id="attrib"></div>
+    <div id="vrbtn"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
