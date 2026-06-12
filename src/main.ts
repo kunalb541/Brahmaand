@@ -18,6 +18,7 @@ import { XRInput } from './core/xrInput';
 import { SkyReadout } from './ui/readout';
 import { ObjectPanel } from './ui/objectPanel';
 import { SURVEYS, type SurveyEntry } from './config/surveys';
+import { getMode, setMode, onModeChange, isPro } from './config/mode';
 import { DEG2RAD, RAD2DEG } from './math/angles';
 import { worldToRaDec } from './math/frames';
 
@@ -124,7 +125,7 @@ function maxPointSize(): number {
 const flyRow = document.createElement('div');
 flyRow.className = 'row';
 flyRow.innerHTML =
-  '<label style="font-size:11px;display:flex;align-items:center;gap:6px">exposure ' +
+  '<label class="pro-only" style="font-size:11px;display:flex;align-items:center;gap:6px">exposure ' +
   '<input id="exposure" type="range" min="-3" max="3" step="0.1" value="0" style="width:90px"></label>' +
   '<button id="return-earth">Return to Earth</button>' +
   '<button id="share-view" title="copy a link to this exact view">⌁ Share</button>';
@@ -221,7 +222,7 @@ async function fetchCatalogNearView(preset: CatalogPreset): Promise<void> {
 }
 
 const catRow = document.createElement('div');
-catRow.className = 'row';
+catRow.className = 'row pro-only';
 catRow.innerHTML = '<span style="font-size:11px;color:#7f93b5;align-self:center">Catalogs:</span>';
 document.getElementById('hud')!.insertBefore(catRow, document.querySelector('#hud .hint'));
 for (const preset of CATALOGS) {
@@ -412,12 +413,30 @@ if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
 }
 
+// --- PRO ⇄ EXPLORE mode toggle ---
+const modeBtn = document.createElement('button');
+(document.getElementById('toggle-stars') as HTMLElement).parentElement!.appendChild(modeBtn);
+function applyMode(): void {
+  const pro = isPro();
+  modeBtn.textContent = pro ? '◆ PRO' : '◇ Explore';
+  modeBtn.title = pro
+    ? 'Professional mode — tap for the simplified public experience'
+    : 'Public mode — tap for research tools (catalogs, readouts, classifiers)';
+  document.getElementById('readout')!.style.display = pro ? '' : 'none';
+  for (const el of document.querySelectorAll<HTMLElement>('.pro-only')) el.style.display = pro ? '' : 'none';
+}
+modeBtn.addEventListener('click', () => setMode(getMode() === 'pro' ? 'public' : 'pro'));
+onModeChange(applyMode);
+applyMode(); // initial state (all pro-only elements exist by this point)
+
 // small LOD / tile-count status
 const hipsStatus = document.createElement('div');
+hipsStatus.className = 'pro-only';
 hipsStatus.style.cssText =
   'position:fixed;bottom:8px;left:120px;z-index:10;font:11px ui-monospace,monospace;' +
   'color:#7f93b5;background:rgba(6,12,24,.55);padding:3px 7px;border-radius:6px;pointer-events:none';
 document.body.appendChild(hipsStatus);
+applyMode(); // re-apply: hipsStatus (pro-only) is created after the initial applyMode()
 
 startLoop(renderer, (dt) => {
   try {

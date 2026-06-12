@@ -12,6 +12,9 @@ import {
 } from '../data/cds';
 import {
   fetchLightcurve,
+  fetchProbabilities,
+  bestClass,
+  topClasses,
   mjdToDate,
   ageDays,
   objectPageUrl,
@@ -20,6 +23,7 @@ import {
   type Transient,
   type LcPoint,
 } from '../data/transients';
+import { isPro } from '../config/mode';
 
 interface PanelOpts {
   flyTo: (raDeg: number, decDeg: number, extended: boolean) => void;
@@ -212,13 +216,45 @@ export class ObjectPanel {
       `<div style="margin-top:6px;color:#bcd">${formatRaHms(t.raDeg)}&nbsp;&nbsp;${formatDecDms(t.decDeg)}</div>` +
       `<div style="color:#7f93b5">last seen ${lastSeen} · ${age < 1 ? 'today' : Math.round(age) + ' d ago'} · ${t.ndet} detection${t.ndet === 1 ? '' : 's'}</div>`;
 
-    this.show(head + `<div style="color:#7f93b5;margin-top:6px">loading light curve…</div>` + this.transientFooter());
+    this.show(head + `<div style="color:#7f93b5;margin-top:6px">loading light curve + classification…</div>` + this.transientFooter());
     try {
-      const lc = await fetchLightcurve(t.oid, ac.signal);
+      // light curve and the broker's ML classifier outputs, in parallel
+      const [lc, probs] = await Promise.all([
+        fetchLightcurve(t.oid, ac.signal),
+        fetchProbabilities(t.oid, ac.signal).catch(() => []),
+      ]);
       if (ac.signal.aborted) return;
+
+      let mlHtml = '';
+      const best = bestClass(probs);
+      if (best) {
+        mlHtml +=
+          `<div style="margin-top:6px"><span style="background:rgba(120,90,230,.4);border-radius:5px;padding:1px 7px;font-size:11px">` +
+          `${escapeHtml(best.cls)} ${(best.prob * 100).toFixed(0)}%</span>` +
+          `<span style="color:#7f93b5;font-size:10px"> · ML: ${escapeHtml(best.classifier)}</span></div>`;
+        if (isPro()) {
+          const top = topClasses(probs, 3);
+          if (top.length > 1) {
+            mlHtml += `<div style="color:#9fb3d6;font-size:10.5px;margin-top:3px">${top
+              .map((p) => `${escapeHtml(p.cls)} ${(p.prob * 100).toFixed(0)}%`)
+              .join(' · ')}</div>`;
+          }
+        }
+      }
+      // real-bogus quality flag (ZTF drb = deep-learning real/bogus score)
+      const rbScore = lc.drb ?? lc.rb;
+      if (rbScore != null) {
+        const label = rbScore >= 0.8 ? '✓ likely real' : rbScore >= 0.4 ? '~ uncertain' : '⚠ possibly bogus';
+        const color = rbScore >= 0.8 ? '#7fe3a8' : rbScore >= 0.4 ? '#e8c66a' : '#f08a7a';
+        mlHtml += `<div style="color:${color};font-size:11px;margin-top:3px">${label}` +
+          (isPro() ? `<span style="color:#7f93b5"> · ${lc.drb != null ? 'drb' : 'rb'} ${rbScore.toFixed(2)}</span>` : '') +
+          `</div>`;
+      }
+
       this.show(
         head +
-          sparkline(lc) +
+          mlHtml +
+          sparkline(lc.points) +
           `<img src="${cutout}" loading="lazy" alt="field" style="display:block;width:100%;margin-top:8px;border-radius:8px;background:#000;aspect-ratio:1">` +
           `<div style="margin-top:8px"><a href="${objectPageUrl(t.oid)}" target="_blank" rel="noopener" style="color:#8aa6d6">ALeRCE object ↗</a></div>` +
           this.transientFooter(),

@@ -93,22 +93,88 @@ export async function fetchNear(
   return out;
 }
 
-const lcCache = new Map<string, LcPoint[]>();
+export interface Lightcurve {
+  points: LcPoint[];
+  /** Deep-learning real-bogus score (max over detections), 0..1; null if absent. */
+  drb: number | null;
+  /** Random-forest real-bogus (fallback when drb is absent). */
+  rb: number | null;
+}
 
-/** Light-curve detections (magnitude vs MJD) for one object. */
-export async function fetchLightcurve(oid: string, signal?: AbortSignal): Promise<LcPoint[]> {
+const lcCache = new Map<string, Lightcurve>();
+
+/** Light-curve detections (magnitude vs MJD) + real-bogus quality scores for one object. */
+export async function fetchLightcurve(oid: string, signal?: AbortSignal): Promise<Lightcurve> {
   const cached = lcCache.get(oid);
   if (cached) return cached;
   await acquire();
   const r = await fetch(`${A.objects}${encodeURIComponent(oid)}/lightcurve`, signal ? { signal } : {});
   if (!r.ok) throw new Error(`lightcurve ${r.status}`);
   const j = (await r.json()) as { detections?: Record<string, unknown>[] };
-  const pts: LcPoint[] = (j.detections ?? [])
+  const dets = j.detections ?? [];
+  const points: LcPoint[] = dets
     .map((d) => ({ mjd: Number(d['mjd']), mag: Number(d['magpsf']), fid: Number(d['fid']) }))
     .filter((p) => isFinite(p.mjd) && isFinite(p.mag))
     .sort((a, b) => a.mjd - b.mjd);
-  lcCache.set(oid, pts);
-  return pts;
+  const max = (k: string): number | null => {
+    let m: number | null = null;
+    for (const d of dets) {
+      const v = Number(d[k]);
+      if (isFinite(v)) m = m === null ? v : Math.max(m, v);
+    }
+    return m;
+  };
+  const lc: Lightcurve = { points, drb: max('drb'), rb: max('rb') };
+  lcCache.set(oid, lc);
+  return lc;
+}
+
+// ---- ML classifications (the broker's classifiers, e.g. ALeRCE lc_classifier) ----
+export interface ClassProb {
+  classifier: string;
+  version: string;
+  cls: string;
+  prob: number;
+  ranking: number;
+}
+
+const probCache = new Map<string, ClassProb[]>();
+
+/** The broker's ML classifier outputs for one object (all classifiers, ranked). */
+export async function fetchProbabilities(oid: string, signal?: AbortSignal): Promise<ClassProb[]> {
+  const cached = probCache.get(oid);
+  if (cached) return cached;
+  await acquire();
+  const r = await fetch(`${A.objects}${encodeURIComponent(oid)}/probabilities`, signal ? { signal } : {});
+  if (!r.ok) throw new Error(`probabilities ${r.status}`);
+  const j = (await r.json()) as Record<string, unknown>[];
+  const out: ClassProb[] = j
+    .map((p) => ({
+      classifier: String(p['classifier_name'] ?? ''),
+      version: String(p['classifier_version'] ?? ''),
+      cls: String(p['class_name'] ?? ''),
+      prob: Number(p['probability'] ?? 0),
+      ranking: Number(p['ranking'] ?? 99),
+    }))
+    .filter((p) => isFinite(p.prob));
+  probCache.set(oid, out);
+  return out;
+}
+
+/** Best current classification: the ranking-1 entry of the main light-curve classifier. */
+export function bestClass(probs: ClassProb[]): ClassProb | null {
+  const main = probs.filter((p) => p.classifier === 'lc_classifier' && p.ranking === 1);
+  if (main.length) return main.sort((a, b) => b.prob - a.prob)[0]!;
+  const any = probs.filter((p) => p.ranking === 1).sort((a, b) => b.prob - a.prob);
+  return any[0] ?? null;
+}
+
+/** Top-N classes of the main classifier (for the pro ranking table). */
+export function topClasses(probs: ClassProb[], n = 3): ClassProb[] {
+  return probs
+    .filter((p) => p.classifier === 'lc_classifier')
+    .sort((a, b) => a.ranking - b.ranking)
+    .slice(0, n);
 }
 
 /** Static fallback snapshot (bundled, real data) when the live broker is slow/unreachable. */

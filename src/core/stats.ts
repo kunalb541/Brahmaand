@@ -8,6 +8,7 @@ export class StatsHud {
 
   constructor(private renderer: THREE.WebGLRenderer) {
     this.el = document.createElement('div');
+    this.el.className = 'pro-only';
     this.el.style.cssText =
       'position:fixed;bottom:8px;left:8px;z-index:10;font:11px ui-monospace,monospace;' +
       'color:#7f93b5;background:rgba(6,12,24,.55);padding:3px 7px;border-radius:6px;pointer-events:none';
