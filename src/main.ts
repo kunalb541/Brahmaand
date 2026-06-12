@@ -12,6 +12,7 @@ import { StarField } from './stars/starField';
 import { TransientLayer } from './sky/transientLayer';
 import { fetchNear, loadSnapshot, type Transient } from './data/transients';
 import { FlyControls } from './core/flyControls';
+import { XRInput } from './core/xrInput';
 import { SkyReadout } from './ui/readout';
 import { ObjectPanel } from './ui/objectPanel';
 import { SURVEYS, type SurveyEntry } from './config/surveys';
@@ -198,17 +199,24 @@ canvas.addEventListener('pointerup', (e) => {
   clickNdc.set((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1, 0.5);
   camera.getWorldPosition(clickCamPos);
   clickNdc.unproject(camera).sub(clickCamPos).normalize();
-  // a transient marker under the click wins over a catalogue lookup
+  pickSkyDirection(clickNdc);
+});
+
+/** Shared by mouse-click and the XR trigger: a transient marker wins, else SIMBAD identify. */
+function pickSkyDirection(dir: THREE.Vector3): void {
   if (transientsOn && transientLayer.count) {
-    const hit = transientLayer.pickNearest(clickNdc, 0.6);
+    const hit = transientLayer.pickNearest(dir, 0.6);
     if (hit) {
       void objectPanel.showTransient(hit);
       return;
     }
   }
-  worldToRaDec(clickNdc, clickRd);
+  worldToRaDec(dir, clickRd);
   void objectPanel.identifyAt(clickRd.raRad * RAD2DEG, clickRd.decRad * RAD2DEG);
-});
+}
+
+// --- WebXR controller input (PHASE-6): rays, trigger→identify, thumbstick fly + snap-turn ---
+const xrInput = new XRInput(renderer, rig, camera, pickSkyDirection);
 
 // --- WebXR "Enter VR" (additive; shows "VR NOT SUPPORTED" on desktop without a headset) ---
 const vrbtn = document.getElementById('vrbtn')!;
@@ -267,6 +275,7 @@ startLoop(renderer, (dt) => {
   try {
     if (!renderer.xr.isPresenting) controls.update(dt);
     fly.update(dt);
+    xrInput.update(dt);
 
     // planetarium ↔ space mode: fade the Earth-view celestial sphere as you leave the Sun
     const dist = fly.distFromSun;

@@ -133,3 +133,21 @@ See [plan/AGENT_INSTRUCTIONS.md](../plan/AGENT_INSTRUCTIONS.md) §6.
   (Sirius, Vega…); HYG patches them. Two `THREE.Points` passes, one shared exposure; ~748k stars
   total at ~40–60 fps, one draw call each. (The blueprint's octree LOD is for the multi-million
   faint catalogue; unnecessary at this size.)
+
+## 2026-06-12 — PHASE-6 (WebXR controllers) — implemented, emulator-verification-pending
+
+- **`src/core/xrInput.ts`** adds, on top of the existing `renderer.xr.enabled` + VRButton:
+  controller pointing rays; **trigger (selectstart) → `pickSkyDirection`** (the *same* identify
+  path as a desktop click — transient marker wins, else SIMBAD); **left thumbstick → fly** (moves
+  the rig, speed scales with distance from the Sun); **right thumbstick → snap-turn** (±30°,
+  re-armed at centre); **foveation 0.4 + 90/72 Hz** requested on `sessionstart`.
+- **All inert until a session starts** — `update()` early-returns when `!isPresenting`, the
+  controllers are pose-less/invisible on desktop. Verified: desktop unaffected (748k stars, click
+  + search still work, zero loop errors; `navigator.xr` present but no device → VRButton shows
+  "VR NOT SUPPORTED", as expected).
+- **Honest limitation:** the team has no headset and IWER couldn't be injected into the preview
+  here, so the immersive session itself is **verification-pending in the Immersive Web Emulator**
+  (and on a real Quest). The implementation follows the three.js r184 WebXR controller API; the
+  desktop-regression and code paths are verified. No 3D controller *models* (avoids the
+  `@webxr-input-profiles` asset dependency) — a ray line is shown instead.
+- **Deferred:** in-VR UI panels (uikit), comfort vignette, hand-tracking, magic-window phone mode.
