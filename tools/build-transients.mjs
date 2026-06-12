@@ -50,15 +50,16 @@ console.log(`  recent → ${seen.size}`);
 
 // cone grid for an all-sky baseline (ANTARES cone search is fast + un-throttled)
 const cones = [];
-for (let dec = -24; dec <= 80; dec += 13) {
-  const nRa = Math.max(4, Math.round(16 * Math.cos((dec * Math.PI) / 180)));
+for (let dec = -26; dec <= 82; dec += 8) {
+  const nRa = Math.max(8, Math.round(28 * Math.cos((dec * Math.PI) / 180)));
   for (let i = 0; i < nRa; i++) cones.push([(i * 360) / nRa, dec]);
 }
 for (let i = 0; i < cones.length; i++) {
   const [ra, dec] = cones[i];
-  ingest(await get(`${ANTARES}/loci?filter%5Bcone%5D=${ra},${dec},6&page%5Bsize%5D=100`));
-  process.stdout.write(`  cone ${i + 1}/${cones.length} · ${seen.size} unique alerts\n`);
-  await sleep(120);
+  ingest(await get(`${ANTARES}/loci?filter%5Bcone%5D=${ra},${dec},3.5&page%5Bsize%5D=100`));
+  if ((i + 1) % 20 === 0 || i === cones.length - 1)
+    process.stdout.write(`  cone ${i + 1}/${cones.length} · ${seen.size} unique alerts\n`);
+  await sleep(80);
 }
 
 const transients = [...seen.values()].sort((a, b) => b.lastmjd - a.lastmjd);

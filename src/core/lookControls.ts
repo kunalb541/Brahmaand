@@ -152,6 +152,15 @@ export class LookControls {
     this.velYaw = this.velPitch = 0;
   }
 
+  /** Directly set look orientation (used by the gyro/device-orientation magic-window). */
+  setYawPitch(yaw: number, pitch: number): void {
+    this.yaw = yaw;
+    this.pitch = pitch;
+    this.velYaw = this.velPitch = 0;
+    this.animating = false;
+    this.clampPitch();
+  }
+
   update(dt: number): void {
     if (this.animating && !this.dragging) {
       this.animT = Math.min(1, this.animT + dt / this.animDur);

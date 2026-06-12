@@ -74,6 +74,7 @@ export function classGroup(cls: string | null): TransientGroup {
   return 'other';
 }
 
+export const brokerName = BROKER === 'antares' ? 'ANTARES' : 'ALeRCE';
 export const surveyLabel =
   BROKER === 'antares' ? 'ANTARES · Rubin/LSST + ZTF' : 'ALeRCE · ZTF (LSST precursor)';
 export const objectPageUrl = (oid: string): string =>

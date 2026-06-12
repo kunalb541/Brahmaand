@@ -19,6 +19,7 @@ import {
   ageDays,
   objectPageUrl,
   surveyLabel,
+  brokerName,
   FID_BAND,
   type Transient,
   type LcPoint,
@@ -266,8 +267,12 @@ export class ObjectPanel {
         head +
           mlHtml +
           sparkline(lc.points) +
-          `<img src="${cutout}" loading="lazy" alt="field" style="display:block;width:100%;margin-top:8px;border-radius:8px;background:#000;aspect-ratio:1">` +
-          `<div style="margin-top:8px"><a href="${objectPageUrl(t.oid)}" target="_blank" rel="noopener" style="color:#8aa6d6">ALeRCE object ↗</a></div>` +
+          // cutout with a reticle marking the alert position (centre = the object)
+          `<div style="position:relative;margin-top:8px">` +
+          `<img src="${cutout}" loading="lazy" alt="field" style="display:block;width:100%;border-radius:8px;background:#000;aspect-ratio:1">` +
+          `<div style="position:absolute;left:50%;top:50%;width:34px;height:34px;margin:-17px 0 0 -17px;border:1.5px solid #6fe3ff;border-radius:50%;box-shadow:0 0 6px #6fe3ff,inset 0 0 4px #6fe3ff;pointer-events:none"></div>` +
+          `</div>` +
+          `<div style="margin-top:8px"><a href="${objectPageUrl(t.oid)}" target="_blank" rel="noopener" style="color:#8aa6d6">${brokerName} object ↗</a></div>` +
           this.transientFooter(),
       );
     } catch (e) {
@@ -278,7 +283,7 @@ export class ObjectPanel {
   }
 
   private transientFooter(): string {
-    return `<div style="margin-top:8px;color:#5f7494;font-size:10px;border-top:1px solid rgba(120,170,255,.12);padding-top:6px">Live: ALeRCE broker · ${escapeHtml(surveyLabel)}</div>`;
+    return `<div style="margin-top:8px;color:#5f7494;font-size:10px;border-top:1px solid rgba(120,170,255,.12);padding-top:6px">Live: ${escapeHtml(surveyLabel)}</div>`;
   }
 
   private footer(): string {

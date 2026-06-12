@@ -22,6 +22,7 @@ import {
 import { CatalogOverlay } from './sky/catalogOverlay';
 import { CATALOGS, fetchCatalog, type CatalogPreset } from './data/vizier';
 import { FlyControls } from './core/flyControls';
+import { DeviceSky } from './core/deviceSky';
 import { XRInput } from './core/xrInput';
 import { SkyReadout } from './ui/readout';
 import { ObjectPanel } from './ui/objectPanel';
@@ -162,8 +163,69 @@ shareBtn.addEventListener('click', () => {
 });
 const isTouch = matchMedia('(pointer: coarse)').matches;
 document.querySelector('#hud .hint')!.textContent = isTouch
-  ? 'Drag to look · pinch to zoom · tap a star to identify'
+  ? 'Drag or move your phone to look · pinch to zoom · joystick to fly · tap to identify'
   : 'Drag to look · scroll to zoom · WASD/QE to fly (W/A/S/D move, Q/E down/up) · click a star to identify';
+
+// --- Touch controls (phones/tablets): a fly joystick + a gyro "move phone to look" toggle ---
+const deviceSky = new DeviceSky(controls);
+if (isTouch) {
+  // gyro toggle
+  const gyroBtn = document.createElement('button');
+  gyroBtn.textContent = '📱 Move-to-look';
+  gyroBtn.style.cssText =
+    'position:fixed;left:50%;transform:translateX(-50%);bottom:calc(14px + env(safe-area-inset-bottom));z-index:12;' +
+    'font:12px ui-monospace,monospace;color:#dcebff;background:rgba(40,70,130,.6);border:1px solid rgba(120,170,255,.4);' +
+    'border-radius:18px;padding:7px 14px';
+  document.body.appendChild(gyroBtn);
+  gyroBtn.addEventListener('click', async () => {
+    if (deviceSky.enabled) {
+      deviceSky.disable();
+      gyroBtn.style.background = 'rgba(40,70,130,.6)';
+    } else if (await deviceSky.enable()) {
+      gyroBtn.style.background = 'rgba(90,140,230,.85)';
+    } else {
+      gyroBtn.textContent = '📱 motion blocked';
+    }
+  });
+
+  // fly joystick (bottom-left): drag the nub → fly.touchFwd / touchStrafe
+  const pad = document.createElement('div');
+  pad.style.cssText =
+    'position:fixed;left:calc(18px + env(safe-area-inset-left));bottom:calc(70px + env(safe-area-inset-bottom));' +
+    'width:96px;height:96px;border-radius:50%;background:rgba(20,30,55,.5);border:1px solid rgba(120,170,255,.3);z-index:12;touch-action:none';
+  const nub = document.createElement('div');
+  nub.style.cssText =
+    'position:absolute;left:50%;top:50%;width:38px;height:38px;margin:-19px 0 0 -19px;border-radius:50%;background:rgba(120,170,255,.7)';
+  pad.appendChild(nub);
+  document.body.appendChild(pad);
+  let padId = -1;
+  const R = 38;
+  const setNub = (dx: number, dy: number) => {
+    const m = Math.hypot(dx, dy) || 1;
+    const c = Math.min(m, R);
+    const nx = (dx / m) * c;
+    const ny = (dy / m) * c;
+    nub.style.transform = `translate(${nx}px,${ny}px)`;
+    fly.touchStrafe = nx / R;
+    fly.touchFwd = -ny / R; // up = forward
+  };
+  pad.addEventListener('pointerdown', (e) => {
+    padId = e.pointerId;
+    pad.setPointerCapture(e.pointerId);
+  });
+  pad.addEventListener('pointermove', (e) => {
+    if (e.pointerId !== padId) return;
+    const r = pad.getBoundingClientRect();
+    setNub(e.clientX - (r.left + r.width / 2), e.clientY - (r.top + r.height / 2));
+  });
+  const endPad = () => {
+    padId = -1;
+    nub.style.transform = '';
+    fly.touchFwd = fly.touchStrafe = 0;
+  };
+  pad.addEventListener('pointerup', endPad);
+  pad.addEventListener('pointercancel', endPad);
+}
 
 // --- Object info: search box + click-to-identify (SIMBAD/Sesame/hips2fits, browser-direct) ---
 const objectPanel = new ObjectPanel({
@@ -217,7 +279,7 @@ tonightBtn.className = 'pro-only'; // alert ingest is a professional feature
 const liveStatus = document.createElement('div');
 liveStatus.className = 'pro-only';
 liveStatus.style.cssText =
-  'position:fixed;right:10px;bottom:calc(26px + env(safe-area-inset-bottom));z-index:11;display:none;font:10px ui-monospace,monospace;color:#6fdf9f';
+  'position:fixed;right:10px;bottom:calc(30px + env(safe-area-inset-bottom));z-index:11;display:none;font:10px ui-monospace,monospace;color:#6fdf9f';
 document.body.appendChild(liveStatus);
 let livePoll: ReturnType<typeof setInterval> | null = null;
 
@@ -243,7 +305,7 @@ const hiddenGroups = new Set<TransientGroup>();
 const legend = document.createElement('div');
 legend.className = 'pro-only';
 legend.style.cssText =
-  'position:fixed;right:10px;bottom:34px;z-index:11;display:none;font:11px ui-monospace,monospace;' +
+  'position:fixed;right:10px;bottom:calc(52px + env(safe-area-inset-bottom));z-index:11;display:none;font:11px ui-monospace,monospace;' +
   'background:rgba(6,12,24,.82);border:1px solid rgba(120,170,255,.2);border-radius:10px;padding:8px 10px';
 document.body.appendChild(legend);
 const legendRows = new Map<TransientGroup, { row: HTMLDivElement; count: HTMLSpanElement }>();

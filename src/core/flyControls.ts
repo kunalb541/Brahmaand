@@ -30,20 +30,28 @@ export class FlyControls {
     return this.rig.position.length();
   }
 
+  // touch joystick vector (−1..1): forward (y) + strafe (x), set by the on-screen pad
+  touchFwd = 0;
+  touchStrafe = 0;
+
   reset(): void {
     this.rig.position.set(0, 0, 0);
   }
 
-  /** True while any movement key is held (used to gate planetarium↔space mode). */
+  /** True while any movement input is active (used to gate planetarium↔space mode). */
   get moving(): boolean {
     const k = this.keys;
-    return ['w', 's', 'a', 'd', 'q', 'e', ' '].some((c) => k.has(c));
+    return (
+      ['w', 's', 'a', 'd', 'q', 'e', ' '].some((c) => k.has(c)) ||
+      Math.abs(this.touchFwd) > 0.05 ||
+      Math.abs(this.touchStrafe) > 0.05
+    );
   }
 
   update(dt: number): void {
     const k = this.keys;
-    let f = 0;
-    let s = 0;
+    let f = this.touchFwd;
+    let s = this.touchStrafe;
     let u = 0;
     if (k.has('w')) f += 1;
     if (k.has('s')) f -= 1;
