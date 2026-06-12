@@ -10,6 +10,16 @@ import {
   type ConeHit,
   type ObjectDetail,
 } from '../data/cds';
+import {
+  fetchLightcurve,
+  mjdToDate,
+  ageDays,
+  objectPageUrl,
+  surveyLabel,
+  FID_BAND,
+  type Transient,
+  type LcPoint,
+} from '../data/transients';
 
 interface PanelOpts {
   flyTo: (raDeg: number, decDeg: number, extended: boolean) => void;
@@ -183,6 +193,47 @@ export class ObjectPanel {
     this.show(rowsHtml.join(''));
   }
 
+  /** Render a live transient: classification, recency, light-curve sparkline, field cutout. */
+  async showTransient(t: Transient): Promise<void> {
+    this.abort?.abort();
+    const ac = new AbortController();
+    this.abort = ac;
+
+    const now = Date.now();
+    const age = ageDays(t.lastMjd, now);
+    const lastSeen = mjdToDate(t.lastMjd).toISOString().slice(0, 10);
+    const cutout = cutoutUrl({ hipsId: 'CDS/P/DSS2/color', raDeg: t.raDeg, decDeg: t.decDeg, fovDeg: 0.05 });
+
+    const head =
+      `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">` +
+      `<b style="font-size:13px;color:#fff">${escapeHtml(t.oid)}</b>` +
+      `<span style="background:rgba(60,200,210,.35);border-radius:5px;padding:1px 6px;font-size:10px">transient</span></div>` +
+      `<div style="color:#7fe3e8;margin-top:2px">${escapeHtml(t.cls ?? 'unclassified')}</div>` +
+      `<div style="margin-top:6px;color:#bcd">${formatRaHms(t.raDeg)}&nbsp;&nbsp;${formatDecDms(t.decDeg)}</div>` +
+      `<div style="color:#7f93b5">last seen ${lastSeen} · ${age < 1 ? 'today' : Math.round(age) + ' d ago'} · ${t.ndet} detection${t.ndet === 1 ? '' : 's'}</div>`;
+
+    this.show(head + `<div style="color:#7f93b5;margin-top:6px">loading light curve…</div>` + this.transientFooter());
+    try {
+      const lc = await fetchLightcurve(t.oid, ac.signal);
+      if (ac.signal.aborted) return;
+      this.show(
+        head +
+          sparkline(lc) +
+          `<img src="${cutout}" loading="lazy" alt="field" style="display:block;width:100%;margin-top:8px;border-radius:8px;background:#000;aspect-ratio:1">` +
+          `<div style="margin-top:8px"><a href="${objectPageUrl(t.oid)}" target="_blank" rel="noopener" style="color:#8aa6d6">ALeRCE object ↗</a></div>` +
+          this.transientFooter(),
+      );
+    } catch (e) {
+      if ((e as Error).name !== 'AbortError') {
+        this.show(head + `<div style="color:#f99;margin-top:6px">light curve unavailable</div>` + this.transientFooter());
+      }
+    }
+  }
+
+  private transientFooter(): string {
+    return `<div style="margin-top:8px;color:#5f7494;font-size:10px;border-top:1px solid rgba(120,170,255,.12);padding-top:6px">Live: ALeRCE broker · ${escapeHtml(surveyLabel)}</div>`;
+  }
+
   private footer(): string {
     return `<div style="margin-top:8px;color:#5f7494;font-size:10px;border-top:1px solid rgba(120,170,255,.12);padding-top:6px">Data: SIMBAD / CDS Strasbourg · cutout DSS2 via hips2fits</div>`;
   }
@@ -201,4 +252,40 @@ export class ObjectPanel {
 
 function escapeHtml(s: string): string {
   return s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
+}
+
+const BAND_COLOR: Record<number, string> = { 1: '#5db95d', 2: '#e05a5a', 3: '#e0b34a' };
+
+/** Magnitude-vs-time light-curve sparkline (y inverted: brighter = higher). */
+function sparkline(lc: LcPoint[]): string {
+  if (!lc.length) return `<div style="color:#7f93b5;margin-top:6px">no detections</div>`;
+  const W = 264;
+  const H = 70;
+  const pad = 8;
+  const mjds = lc.map((p) => p.mjd);
+  const mags = lc.map((p) => p.mag);
+  const mjd0 = Math.min(...mjds);
+  const mjd1 = Math.max(...mjds);
+  const mag0 = Math.min(...mags);
+  const mag1 = Math.max(...mags);
+  const dxr = mjd1 - mjd0 || 1;
+  const dyr = mag1 - mag0 || 1;
+  const X = (m: number) => pad + ((m - mjd0) / dxr) * (W - 2 * pad);
+  const Y = (mag: number) => pad + ((mag - mag0) / dyr) * (H - 2 * pad); // low mag (bright) at top
+
+  const byBand = new Map<number, LcPoint[]>();
+  for (const p of lc) (byBand.get(p.fid) ?? byBand.set(p.fid, []).get(p.fid)!).push(p);
+
+  let svg = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;margin-top:8px;background:rgba(0,0,0,.3);border-radius:6px">`;
+  for (const [fid, pts] of byBand) {
+    const color = BAND_COLOR[fid] ?? '#9cc4ff';
+    if (pts.length > 1) {
+      const d = pts.map((p, i) => `${i ? 'L' : 'M'}${X(p.mjd).toFixed(1)} ${Y(p.mag).toFixed(1)}`).join(' ');
+      svg += `<path d="${d}" fill="none" stroke="${color}" stroke-width="1.2" opacity="0.8"/>`;
+    }
+    for (const p of pts) svg += `<circle cx="${X(p.mjd).toFixed(1)}" cy="${Y(p.mag).toFixed(1)}" r="2" fill="${color}"/>`;
+  }
+  svg += `</svg>`;
+  const bands = [...byBand.keys()].sort().map((f) => FID_BAND[f]).join('/');
+  return svg + `<div style="color:#5f7494;font-size:10px">mag vs time · ${escapeHtml(bands)} · ${mag1.toFixed(1)}→${mag0.toFixed(1)}</div>`;
 }

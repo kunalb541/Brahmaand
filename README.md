@@ -6,7 +6,7 @@ data services. **Desktop-first, VR-ready** — it runs as a normal desktop/mobil
 additive "Enter VR" mode for WebXR headsets (developed and tested headset-free via the Immersive
 Web Emulator / IWER).
 
-> **Status: PHASE-0 → PHASE-3 + PHASE-5 BUILT & RUNNABLE.** A working desktop app exists — a
+> **Status: PHASE-0 → PHASE-3 + PHASE-5 + PHASE-7 BUILT & RUNNABLE.** A working desktop app exists — a
 > real-imagery celestial sphere (DSS2 colour + Mellinger Milky Way) you can pan and zoom, with a
 > live RA/Dec readout, constellation overlay, bright-star labels, a survey switcher, exposure
 > slider, and an additive WebXR "Enter VR" button. **Zooming streams live HiPS tiles from CDS**
@@ -14,10 +14,12 @@ Web Emulator / IWER).
 > **WASD flies you off Earth through 109,400 real stars** (HYG, real parallax distances) with
 > photometric brightening and a planetarium→space transition. **Click any star or search by name**
 > → real SIMBAD data (type, magnitudes, spectral type, parallax-derived distance), a hips2fits image
-> cutout, and links out — all browser-direct, no backend (verified: M31, Sirius, Betelgeuse). The
-> rest of the blueprint (PHASE-4 full Gaia pipeline, PHASE-6 full WebXR, PHASE-7 transients, PHASE-8
-> deploy) is a complete, live-verified implementation plan. See [docs/DECISIONS.md](docs/DECISIONS.md)
-> for what's implemented vs the full spec.
+> cutout, and links out — all browser-direct, no backend (verified: M31, Sirius, Betelgeuse). A
+> **"Tonight" layer streams live transient alerts** from the ALeRCE broker (ZTF — the LSST precursor
+> survey) as ring markers on the sky; click one for its classification, light curve, and field
+> cutout (verified on real 2026 alerts). The rest of the blueprint (PHASE-4 full Gaia pipeline,
+> PHASE-6 full WebXR, PHASE-8 deploy) is a complete, live-verified implementation plan. See
+> [docs/DECISIONS.md](docs/DECISIONS.md) for what's implemented vs the full spec.
 
 ## Quick start
 

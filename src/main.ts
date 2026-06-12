@@ -9,6 +9,8 @@ import { HipsLayer } from './sky/hips/hipsLayer';
 import { createConstellationLines } from './sky/constellations';
 import { StarLabels } from './sky/starLabels';
 import { StarField } from './stars/starField';
+import { TransientLayer } from './sky/transientLayer';
+import { fetchNear, loadSnapshot, type Transient } from './data/transients';
 import { FlyControls } from './core/flyControls';
 import { SkyReadout } from './ui/readout';
 import { ObjectPanel } from './ui/objectPanel';
@@ -131,6 +133,46 @@ const objectPanel = new ObjectPanel({
   getFovDeg: () => controls.fovDeg,
 });
 
+// --- Live transients ("Tonight": Rubin/LSST-precursor ZTF alerts via ALeRCE) ---
+const transientLayer = new TransientLayer(scene);
+const transientMap = new Map<string, Transient>();
+let transientsOn = false;
+const lastFetchDir = new THREE.Vector3(2, 0, 0);
+const viewDir = new THREE.Vector3();
+const tonightRd = { raRad: 0, decRad: 0 };
+
+function applyTransients(): void {
+  transientLayer.setTransients([...transientMap.values()], Date.now());
+}
+async function loadTonightSnapshot(): Promise<void> {
+  for (const t of await loadSnapshot()) transientMap.set(t.oid, t);
+  applyTransients();
+}
+async function fetchTransientsNearView(): Promise<void> {
+  camera.getWorldDirection(viewDir);
+  worldToRaDec(viewDir, tonightRd);
+  try {
+    const near = await fetchNear(tonightRd.raRad * RAD2DEG, tonightRd.decRad * RAD2DEG, 8);
+    for (const t of near) transientMap.set(t.oid, t);
+    applyTransients();
+  } catch (e) {
+    console.warn('live transient fetch failed (keeping snapshot)', e);
+  }
+}
+
+const tonightBtn = document.createElement('button');
+tonightBtn.textContent = '◎ Tonight';
+tonightBtn.title = 'Live transient alerts (ZTF via ALeRCE)';
+(document.getElementById('toggle-stars') as HTMLElement).parentElement!.appendChild(tonightBtn);
+tonightBtn.addEventListener('click', () => {
+  transientsOn = tonightBtn.classList.toggle('active');
+  if (transientsOn) {
+    fly.reset(); // transients are sky-direction objects — view from Earth
+    if (transientMap.size === 0) void loadTonightSnapshot();
+    void fetchTransientsNearView();
+  }
+});
+
 // click (not drag) → sky direction → identify
 const clickNdc = new THREE.Vector3();
 const clickCamPos = new THREE.Vector3();
@@ -149,6 +191,14 @@ canvas.addEventListener('pointerup', (e) => {
   clickNdc.set((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1, 0.5);
   camera.getWorldPosition(clickCamPos);
   clickNdc.unproject(camera).sub(clickCamPos).normalize();
+  // a transient marker under the click wins over a catalogue lookup
+  if (transientsOn && transientLayer.count) {
+    const hit = transientLayer.pickNearest(clickNdc, 0.6);
+    if (hit) {
+      void objectPanel.showTransient(hit);
+      return;
+    }
+  }
   worldToRaDec(clickNdc, clickRd);
   void objectPanel.identifyAt(clickRd.raRad * RAD2DEG, clickRd.decRad * RAD2DEG);
 });
@@ -162,7 +212,9 @@ addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
-  starField?.setPixelScale(renderer.getDrawingBufferSize(new THREE.Vector2()).y);
+  const h = renderer.getDrawingBufferSize(new THREE.Vector2()).y;
+  starField?.setPixelScale(h);
+  transientLayer.setPixelScale(h);
 });
 
 // --- Dev helper: window.goto(raDeg, decDeg) ---
@@ -173,7 +225,17 @@ declare global {
 }
 window.goto = (raDeg, decDeg) => controls.pointAt(raDeg * DEG2RAD, decDeg * DEG2RAD);
 // debug handle
-(window as unknown as { __dbg: unknown }).__dbg = { hips, scene, camera, controls, rig, fly };
+(window as unknown as { __dbg: unknown }).__dbg = {
+  hips,
+  scene,
+  camera,
+  controls,
+  rig,
+  fly,
+  transientLayer,
+  tonightBtn,
+};
+transientLayer.setPixelScale(renderer.getDrawingBufferSize(new THREE.Vector2()).y);
 
 // --- Boot ---
 setSurvey(currentSurvey)
@@ -220,6 +282,18 @@ startLoop(renderer, (dt) => {
     hips.setVisible(nearEarth);
     if (nearEarth) hips.update(camera);
     else if (hips.tileCount) hips.clear();
+
+    // transients: Earth-view only; refetch when the view pans far enough
+    transientLayer.setCenter(rig.position);
+    const showTransients = transientsOn && f > 0.5;
+    transientLayer.setVisible(showTransients);
+    if (showTransients) {
+      camera.getWorldDirection(viewDir);
+      if (viewDir.angleTo(lastFetchDir) > 0.06) {
+        lastFetchDir.copy(viewDir);
+        void fetchTransientsNearView();
+      }
+    }
 
     readout.update();
     starLabels.update();

@@ -90,3 +90,28 @@ See [plan/AGENT_INSTRUCTIONS.md](../plan/AGENT_INSTRUCTIONS.md) §6.
   M1-M2Ia-Iab, ≈ 152.7 pc — all real SIMBAD data, browser-direct, no backend.
 - **Deferred** (per the runbook): VR/uikit panel mirror → PHASE-6; SW caching of cutouts → PHASE-8;
   VizieR Gaia cross-match section; 3D-star picking by catalogue id (click uses sky direction).
+
+## 2026-06-12 — PHASE-7 (live transient layer) — implemented on ZTF, LSST-ready
+
+- **Broker reality (probed live 2026-06-12):** the Rubin/LSST broker endpoints respond
+  (`api-lsst.alerce.online` OpenAPI 200, CORS `*`) but **`/list_objects` 500s on every query** and
+  Fink LSST `/latests` 404s — the young LSST APIs aren't reliably serving data yet. So the feature
+  is built on the **ALeRCE ZTF** broker (LSST's precursor survey) — real 2026 alerts, CORS-open.
+- **Cone search, not full-table sort.** ALeRCE's unfiltered `order_by=lastmjd` over the whole table
+  times out; the **cone search is spatially indexed and fast/reliable**, so the app fetches
+  transients *near the current view* (and merges a bundled sky-wide snapshot). `order_mode` must be
+  uppercase `DESC`/`ASC`; objects redirect to a trailing-slash URL.
+- **Adapter seam:** `src/data/transients.ts` keys everything off `SURVEY='ztf'`; an `lsst` adapter
+  (same ALeRCE shape, different host) is a one-line swap once `/list_objects` stabilises.
+- **IDs are strings** (`oid`; LSST `diaObjectId` is int64 > 2^53 — never a JS number).
+- **Static fallback** `public/transients/tonight.json` (72 real ZTF objects, fetched by
+  `tools/build-stars`-style `tools/build-transients.mjs`) so markers show even when the live broker
+  is down; the app queries live first and merges.
+- **Markers** = `THREE.Points` ring shader on the sky sphere, coloured by age (cyan→orange over
+  ~30 d), sized by detection count; follow the camera; Earth-view only; nearest-marker picking
+  beats SIMBAD on click. **Detail panel** adds an SVG light-curve sparkline (g/r/i bands, mag vs
+  time, y inverted) + a DSS2 field cutout + ALeRCE link.
+- **Verified:** "Tonight" toggle → real markers across the sky; click ZTF19abbtwvp → unclassified
+  variable, last seen 2026-06-11, 79 detections, real g/r light curve (19.0→16.9), field cutout.
+- **Deferred:** the LSST swap (pending broker stability), Rubin First Look HiPS layer, a "tour"
+  mode, the nightly cron to refresh `tonight.json` (PHASE-8).
