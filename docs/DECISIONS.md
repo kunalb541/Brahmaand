@@ -115,3 +115,21 @@ See [plan/AGENT_INSTRUCTIONS.md](../plan/AGENT_INSTRUCTIONS.md) §6.
   variable, last seen 2026-06-11, 79 detections, real g/r light curve (19.0→16.9), field cutout.
 - **Deferred:** the LSST swap (pending broker stability), Rubin First Look HiPS layer, a "tour"
   mode, the nightly cron to refresh `tonight.json` (PHASE-8).
+
+## 2026-06-12 — PHASE-4 (real Gaia catalogue) — 638k stars, pragmatic pipeline
+
+- **`tools/build-gaia.mjs`** fetches **638,856 real Gaia DR3 stars** (`G<10.5`,
+  `parallax_over_error>5`, `ruwe<1.4`) from the ESA TAP and writes the same binary format as
+  the HYG set → `public/catalogs/gaia.bin` (12.1 MB).
+- **Fetch strategy:** the anonymous **async** job errors on the full 639k result, and a single
+  **sync** call caps near ~100k rows (~90 s each), so the script **partitions by RA into 12 bands
+  fetched 3-at-a-time** (disjoint → no dedup). Completes in ~2–3 min.
+- **Distances = 1000/parallax**, not Bailer-Jones. The `external.gaiaedr3_distance` join exceeds
+  the anonymous async limit; for this **bright, high-S/N subset** (`parallax_over_error>5`,
+  ~<20% parallax error) 1/parallax is reliable. The full faint catalogue still needs Bailer-Jones
+  (docs/04 §A3) — documented deviation.
+- **Colour** from `teff_gspphot` when present, else Ballesteros(`bp_rp`) → the same palette as HYG.
+- **Gaia + HYG both render.** Gaia's `ruwe`/parallax cuts drop the very brightest saturated stars
+  (Sirius, Vega…); HYG patches them. Two `THREE.Points` passes, one shared exposure; ~748k stars
+  total at ~40–60 fps, one draw call each. (The blueprint's octree LOD is for the multi-million
+  faint catalogue; unnecessary at this size.)

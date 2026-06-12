@@ -90,16 +90,22 @@ toggleStars.addEventListener('click', () => {
   starLabelsOn = toggleStars.classList.toggle('active');
 });
 
-// --- 3D star field (real Gaia/HYG distances) + fly controls ---
+// --- 3D star field + fly controls ---
+// Gaia DR3 (638k) is the deep field; HYG patches the very brightest naked-eye stars that
+// Gaia's ruwe/parallax cuts exclude (Sirius, Vega, …). Both render with one shared exposure.
 const fly = new FlyControls(rig, camera);
-let starField: StarField | null = null;
-StarField.load('catalogs/hyg.bin', 'catalogs/hyg.json', maxPointSize())
-  .then((sf) => {
-    starField = sf;
-    sf.setPixelScale(renderer.getDrawingBufferSize(new THREE.Vector2()).y);
-    scene.add(sf.points);
-  })
-  .catch((e) => console.warn('star field failed to load', e));
+const starFields: StarField[] = [];
+function loadField(bin: string, meta: string): void {
+  StarField.load(bin, meta, maxPointSize())
+    .then((sf) => {
+      sf.setPixelScale(renderer.getDrawingBufferSize(new THREE.Vector2()).y);
+      scene.add(sf.points);
+      starFields.push(sf);
+    })
+    .catch((e) => console.warn(`star field ${bin} failed to load`, e));
+}
+loadField('catalogs/gaia.bin', 'catalogs/gaia.json');
+loadField('catalogs/hyg.bin', 'catalogs/hyg.json');
 
 function maxPointSize(): number {
   const gl = renderer.getContext();
@@ -115,7 +121,8 @@ flyRow.innerHTML =
   '<button id="return-earth">Return to Earth</button>';
 document.getElementById('hud')!.insertBefore(flyRow, document.querySelector('#hud .hint'));
 (document.getElementById('exposure') as HTMLInputElement).addEventListener('input', (e) => {
-  starField?.setExposure(parseFloat((e.target as HTMLInputElement).value));
+  const stops = parseFloat((e.target as HTMLInputElement).value);
+  for (const sf of starFields) sf.setExposure(stops);
 });
 document.getElementById('return-earth')!.addEventListener('click', () => {
   fly.reset();
@@ -213,7 +220,7 @@ addEventListener('resize', () => {
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
   const h = renderer.getDrawingBufferSize(new THREE.Vector2()).y;
-  starField?.setPixelScale(h);
+  for (const sf of starFields) sf.setPixelScale(h);
   transientLayer.setPixelScale(h);
 });
 
