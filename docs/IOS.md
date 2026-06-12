@@ -5,10 +5,9 @@ WKWebView with native plugins (geolocation, haptics, share, app lifecycle; push 
 Xcode project is **committed at [`ios/`](../ios)** and uses **Swift Package Manager** (no
 CocoaPods needed). Config: [`capacitor.config.ts`](../capacitor.config.ts).
 
-> **Status 2026-06-12:** the `ios/` project is generated, synced, and committed. The machine's
-> `/Applications` had **no Xcode.app yet** (only Command Line Tools — if you installed from the
-> App Store it may still be downloading; it's ~7 GB). Once Xcode.app exists, the steps below are
-> all that's left.
+> **Status 2026-06-12:** ✅ **the iOS app compiles** — `xcodebuild` for the iphonesimulator SDK
+> returns **BUILD SUCCEEDED** with Xcode 26.5 (SPM resolves capacitor-swift-pm + the geolocation
+> plugin; no CodeSign needed for the simulator). The steps below add your phone + free signing.
 
 ## One-time setup
 

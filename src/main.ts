@@ -10,7 +10,15 @@ import { createConstellationLines } from './sky/constellations';
 import { StarLabels } from './sky/starLabels';
 import { StarField } from './stars/starField';
 import { TransientLayer } from './sky/transientLayer';
-import { fetchNear, loadSnapshot, type Transient } from './data/transients';
+import {
+  fetchNear,
+  loadSnapshot,
+  GROUP_LIST,
+  GROUP_LABEL,
+  GROUP_COLOR,
+  type Transient,
+  type TransientGroup,
+} from './data/transients';
 import { CatalogOverlay } from './sky/catalogOverlay';
 import { CATALOGS, fetchCatalog, type CatalogPreset } from './data/vizier';
 import { FlyControls } from './core/flyControls';
@@ -151,8 +159,10 @@ shareBtn.addEventListener('click', () => {
     () => {},
   );
 });
-document.querySelector('#hud .hint')!.textContent =
-  'Drag to look · scroll to zoom · WASD/QE to fly · click a star to identify';
+const isTouch = matchMedia('(pointer: coarse)').matches;
+document.querySelector('#hud .hint')!.textContent = isTouch
+  ? 'Drag to look · pinch to zoom · tap a star to identify'
+  : 'Drag to look · scroll to zoom · WASD/QE to fly (W/A/S/D move, Q/E down/up) · click a star to identify';
 
 // --- Object info: search box + click-to-identify (SIMBAD/Sesame/hips2fits, browser-direct) ---
 const objectPanel = new ObjectPanel({
@@ -173,18 +183,22 @@ const tonightRd = { raRad: 0, decRad: 0 };
 
 function applyTransients(): void {
   transientLayer.setTransients([...transientMap.values()], Date.now());
+  refreshLegend();
 }
 async function loadTonightSnapshot(): Promise<void> {
   for (const t of await loadSnapshot()) transientMap.set(t.oid, t);
   applyTransients();
 }
+let lastAlertUpdate = 0;
 async function fetchTransientsNearView(): Promise<void> {
   camera.getWorldDirection(viewDir);
   worldToRaDec(viewDir, tonightRd);
   try {
+    const before = transientMap.size;
     const near = await fetchNear(tonightRd.raRad * RAD2DEG, tonightRd.decRad * RAD2DEG, 8);
     for (const t of near) transientMap.set(t.oid, t);
-    applyTransients();
+    lastAlertUpdate = Date.now();
+    if (transientMap.size !== before || near.length) applyTransients();
   } catch (e) {
     console.warn('live transient fetch failed (keeping snapshot)', e);
   }
@@ -193,15 +207,75 @@ async function fetchTransientsNearView(): Promise<void> {
 const tonightBtn = document.createElement('button');
 tonightBtn.textContent = '◎ Tonight';
 tonightBtn.title = 'Live transient alerts (ZTF via ALeRCE)';
+tonightBtn.className = 'pro-only'; // alert ingest is a professional feature
 (document.getElementById('toggle-stars') as HTMLElement).parentElement!.appendChild(tonightBtn);
+
+// Live polling: while Tonight is on, re-query the broker near the view every 30 s (the cone
+// cache TTL) so fresh alerts stream in. A "● LIVE" indicator shows seconds since last update.
+// Sits ABOVE the attribution line (bottom:26px) so the two don't overlap.
+const liveStatus = document.createElement('div');
+liveStatus.className = 'pro-only';
+liveStatus.style.cssText =
+  'position:fixed;right:10px;bottom:calc(26px + env(safe-area-inset-bottom));z-index:11;display:none;font:10px ui-monospace,monospace;color:#6fdf9f';
+document.body.appendChild(liveStatus);
+let livePoll: ReturnType<typeof setInterval> | null = null;
+
 tonightBtn.addEventListener('click', () => {
   transientsOn = tonightBtn.classList.toggle('active');
+  legend.style.display = transientsOn ? 'block' : 'none';
+  liveStatus.style.display = transientsOn ? 'block' : 'none';
   if (transientsOn) {
     fly.reset(); // transients are sky-direction objects — view from Earth
     if (transientMap.size === 0) void loadTonightSnapshot();
     void fetchTransientsNearView();
+    livePoll ??= setInterval(() => {
+      if (transientsOn) void fetchTransientsNearView();
+    }, 30000);
+  } else if (livePoll) {
+    clearInterval(livePoll);
+    livePoll = null;
   }
 });
+
+// --- classification legend + per-class filter (markers coloured by the broker's ML class) ---
+const hiddenGroups = new Set<TransientGroup>();
+const legend = document.createElement('div');
+legend.className = 'pro-only';
+legend.style.cssText =
+  'position:fixed;right:10px;bottom:34px;z-index:11;display:none;font:11px ui-monospace,monospace;' +
+  'background:rgba(6,12,24,.82);border:1px solid rgba(120,170,255,.2);border-radius:10px;padding:8px 10px';
+document.body.appendChild(legend);
+const legendRows = new Map<TransientGroup, { row: HTMLDivElement; count: HTMLSpanElement }>();
+{
+  const title = document.createElement('div');
+  title.textContent = 'Alert classes (tap to filter)';
+  title.style.cssText = 'color:#9cc4ff;margin-bottom:5px;font-size:10px';
+  legend.appendChild(title);
+  for (const g of GROUP_LIST) {
+    const [r, gg, b] = GROUP_COLOR[g];
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:7px;cursor:pointer;padding:2px 0';
+    const sw = document.createElement('span');
+    sw.style.cssText = `width:10px;height:10px;border-radius:50%;background:rgb(${(r * 255) | 0},${(gg * 255) | 0},${(b * 255) | 0});flex:none`;
+    const lbl = document.createElement('span');
+    lbl.textContent = GROUP_LABEL[g];
+    lbl.style.color = '#cfe3ff';
+    const count = document.createElement('span');
+    count.style.cssText = 'color:#7f93b5;margin-left:auto';
+    row.append(sw, lbl, count);
+    row.addEventListener('click', () => {
+      if (hiddenGroups.has(g)) hiddenGroups.delete(g);
+      else hiddenGroups.add(g);
+      row.style.opacity = hiddenGroups.has(g) ? '0.35' : '1';
+      transientLayer.setHiddenGroups(hiddenGroups);
+    });
+    legend.appendChild(row);
+    legendRows.set(g, { row, count });
+  }
+}
+function refreshLegend(): void {
+  for (const g of GROUP_LIST) legendRows.get(g)!.count.textContent = String(transientLayer.groupCounts[g]);
+}
 
 // --- VizieR multiwavelength catalogue overlays ---
 const catalogOverlay = new CatalogOverlay(scene);
@@ -433,7 +507,7 @@ applyMode(); // initial state (all pro-only elements exist by this point)
 const hipsStatus = document.createElement('div');
 hipsStatus.className = 'pro-only';
 hipsStatus.style.cssText =
-  'position:fixed;bottom:8px;left:120px;z-index:10;font:11px ui-monospace,monospace;' +
+  'position:fixed;bottom:calc(26px + env(safe-area-inset-bottom));left:8px;z-index:10;font:11px ui-monospace,monospace;' +
   'color:#7f93b5;background:rgba(6,12,24,.55);padding:3px 7px;border-radius:6px;pointer-events:none';
 document.body.appendChild(hipsStatus);
 applyMode(); // re-apply: hipsStatus (pro-only) is created after the initial applyMode()
@@ -476,6 +550,11 @@ startLoop(renderer, (dt) => {
         lastFetchDir.copy(viewDir);
         void fetchTransientsNearView();
       }
+      const ago = lastAlertUpdate ? Math.round((Date.now() - lastAlertUpdate) / 1000) : -1;
+      liveStatus.textContent =
+        ago < 0
+          ? '◌ connecting to broker…'
+          : `● LIVE · ${transientMap.size} alerts · updated ${ago}s ago`;
     }
 
     // catalogue overlays: Earth-view; refetch around the new view when panned

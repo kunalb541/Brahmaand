@@ -38,6 +38,42 @@ export interface LcPoint {
   fid: number; // 1=g, 2=r, 3=i
 }
 
+// ---- classification groups (for all-sky marker colouring + filtering) ----
+export type TransientGroup = 'transient' | 'agn' | 'periodic' | 'stochastic' | 'other';
+
+export const GROUP_COLOR: Record<TransientGroup, [number, number, number]> = {
+  transient: [1.0, 0.36, 0.24], // red-orange — supernovae / transients
+  agn: [0.8, 0.36, 1.0], // purple — AGN / QSO / blazar
+  periodic: [0.34, 0.7, 1.0], // blue — pulsating / eclipsing variables
+  stochastic: [0.28, 0.92, 0.62], // green — YSO / CV / nova
+  other: [0.62, 0.68, 0.8], // grey-blue — unclassified / other
+};
+
+export const GROUP_LABEL: Record<TransientGroup, string> = {
+  transient: 'Supernovae / transients',
+  agn: 'AGN / QSO / blazar',
+  periodic: 'Pulsating / eclipsing',
+  stochastic: 'YSO / CV / nova',
+  other: 'Unclassified / other',
+};
+
+export const GROUP_LIST: TransientGroup[] = ['transient', 'agn', 'periodic', 'stochastic', 'other'];
+
+/** Map an ALeRCE class label to one of our display groups. */
+export function classGroup(cls: string | null): TransientGroup {
+  if (!cls) return 'other';
+  const c = cls.toUpperCase();
+  if (c.startsWith('SN') || c.includes('SLSN')) return 'transient';
+  if (c === 'AGN' || c === 'QSO' || c === 'BLAZAR') return 'agn';
+  if (c === 'YSO' || c === 'CV/NOVA' || c === 'CV' || c === 'NOVA') return 'stochastic';
+  if (
+    c.includes('PERIODIC') ||
+    ['RRL', 'CEP', 'CEPH', 'DSCT', 'E', 'EA', 'EB', 'LPV'].includes(c)
+  )
+    return 'periodic';
+  return 'other';
+}
+
 export const surveyLabel = A.label;
 export const objectPageUrl = (oid: string): string => A.page(oid);
 
@@ -59,7 +95,8 @@ function acquire(): Promise<void> {
   return new Promise((r) => waiters.push(r));
 }
 
-const coneCache = new Map<string, Transient[]>();
+const CONE_TTL_MS = 30000; // live: cone results expire so polling fetches fresh alerts
+const coneCache = new Map<string, { data: Transient[]; t: number }>();
 
 /** Recent transients within `radiusDeg` of an ICRS position, newest first. */
 export async function fetchNear(
@@ -70,7 +107,7 @@ export async function fetchNear(
 ): Promise<Transient[]> {
   const key = `${raDeg.toFixed(2)}:${decDeg.toFixed(2)}:${radiusDeg.toFixed(2)}`;
   const cached = coneCache.get(key);
-  if (cached) return cached;
+  if (cached && Date.now() - cached.t < CONE_TTL_MS) return cached.data;
 
   await acquire();
   const radiusArcsec = Math.min(radiusDeg * 3600, 36000); // cap 10°
@@ -89,7 +126,7 @@ export async function fetchNear(
     ndet: Number(o['ndet'] ?? 0),
     cls: (o['class'] as string) ?? null,
   }));
-  coneCache.set(key, out);
+  coneCache.set(key, { data: out, t: Date.now() });
   return out;
 }
 

@@ -230,3 +230,19 @@ See [plan/AGENT_INSTRUCTIONS.md](../plan/AGENT_INSTRUCTIONS.md) §6.
   likely still downloading), and there's no Java/Android SDK — so the **binary builds are
   user-side**: docs/IOS.md + docs/ANDROID.md are one-click runbooks (`ios:sync`/`ios:open`,
   `android:sync`/`android:open`).
+
+## 2026-06-12 — All-sky alert ingest + classification-coloured markers
+
+- **All-sky ingest:** `tools/build-transients.mjs` now tiles the whole ZTF-visible sky
+  (dec > −31) with a dense cone grid (RA count ∝ cos dec, radius ~8°, concurrency 4) — the
+  broker's full-table `lastmjd` sort times out, but indexed cone searches don't. Merges +
+  dedupes into an all-sky `tonight.json`. "Most of the heavy work the broker already does"
+  (detection + ML classification); we ingest oid/position/recency/**class**.
+- **Markers coloured by the broker's ML class** (not age): supernovae red-orange, AGN/QSO purple,
+  pulsating/eclipsing blue, YSO/CV green, unclassified grey; recent alerts brighter; size ∝ ndet.
+  `classGroup()` maps the ALeRCE taxonomy → 5 display groups.
+- **Legend + per-class filter** (bottom-right): live per-group counts; tap a class to show/hide
+  it across the whole sky. Real/bogus (`drb`) + full classifier ranking remain in the click panel.
+- **Real-time seam:** the all-sky snapshot is the instant baseline (rebuilt nightly via the
+  PHASE-8 cron); the runtime still fires a live cone query near the current view and merges, so
+  what you're looking at is freshest. LSST host swaps in via the `SURVEY` adapter when stable.

@@ -2,12 +2,13 @@ import * as THREE from 'three';
 import { DEG2RAD } from '../math/angles';
 import { raDecToWorld } from '../math/frames';
 import { SKY_RADIUS } from './skySphere';
-import { ageDays, type Transient } from '../data/transients';
+import { classGroup, GROUP_COLOR, type Transient, type TransientGroup } from '../data/transients';
 
 /**
- * Renders live transient alerts as ring markers on the celestial sphere, coloured by age
- * (recent = cyan, fading to orange over ~30 days). Follows the camera like the sky sphere
- * so it stays "at infinity" in planetarium mode. Supports nearest-marker picking.
+ * Renders live transient alerts as ring markers on the celestial sphere, coloured by the
+ * broker's ML CLASSIFICATION (supernova / AGN / variable / …), sized by detection count,
+ * recent alerts brighter. Follows the camera so it stays "at infinity". Supports per-class
+ * filtering and nearest-marker picking.
  */
 
 const R = SKY_RADIUS * 0.985; // just inside the sky, in front of constellations/stars
@@ -40,17 +41,21 @@ const MARKER_FRAG = /* glsl */ `
   }
 `;
 
-function ageColor(days: number, out: THREE.Color): THREE.Color {
-  // 0d cyan → 30d orange
-  const t = Math.min(Math.max(days / 30, 0), 1);
-  return out.setRGB(0.2 + 0.8 * t, 0.9 - 0.4 * t, 1.0 - 0.9 * t);
-}
-
 export class TransientLayer {
   private group = new THREE.Group();
   private points: THREE.Points | null = null;
   private mat: THREE.ShaderMaterial;
-  private items: { t: Transient; dir: THREE.Vector3 }[] = [];
+  private items: { t: Transient; dir: THREE.Vector3; grp: TransientGroup }[] = [];
+  private hidden = new Set<TransientGroup>();
+  private nowMs = 0;
+  /** live per-group counts of the current set (for the legend). */
+  readonly groupCounts: Record<TransientGroup, number> = {
+    transient: 0,
+    agn: 0,
+    periodic: 0,
+    stochastic: 0,
+    other: 0,
+  };
 
   constructor(scene: THREE.Scene) {
     this.group.renderOrder = 20; // over sky, stars, constellations
@@ -82,29 +87,44 @@ export class TransientLayer {
   }
 
   setTransients(list: Transient[], nowMs: number): void {
-    this.dispose();
+    this.nowMs = nowMs;
     this.items = list.map((t) => {
       const dir = new THREE.Vector3();
       raDecToWorld(t.raDeg * DEG2RAD, t.decDeg * DEG2RAD, dir);
-      return { t, dir };
+      return { t, dir, grp: classGroup(t.cls) };
     });
-    if (!this.items.length) return;
+    for (const g of Object.keys(this.groupCounts) as TransientGroup[]) this.groupCounts[g] = 0;
+    for (const it of this.items) this.groupCounts[it.grp]++;
+    this.rebuild();
+  }
 
-    const n = this.items.length;
+  /** Hide/show whole classification groups (legend toggles). */
+  setHiddenGroups(hidden: Set<TransientGroup>): void {
+    this.hidden = hidden;
+    this.rebuild();
+  }
+
+  private rebuild(): void {
+    this.dispose();
+    const visible = this.items.filter((it) => !this.hidden.has(it.grp));
+    if (!visible.length) return;
+    const n = visible.length;
     const pos = new Float32Array(n * 3);
     const col = new Float32Array(n * 3);
     const size = new Float32Array(n);
-    const c = new THREE.Color();
     for (let i = 0; i < n; i++) {
-      const { t, dir } = this.items[i]!;
+      const { t, dir, grp } = visible[i]!;
       pos[i * 3] = dir.x * R;
       pos[i * 3 + 1] = dir.y * R;
       pos[i * 3 + 2] = dir.z * R;
-      ageColor(ageDays(t.lastMjd, nowMs), c);
-      col[i * 3] = c.r;
-      col[i * 3 + 1] = c.g;
-      col[i * 3 + 2] = c.b;
-      size[i] = 16 + Math.min(t.ndet, 40) * 0.4; // more detections → bigger marker
+      const rgb = GROUP_COLOR[grp];
+      // recent alerts brighter; older dimmer (down to 45%) over ~30 days
+      const age = (this.nowMs - (t.lastMjd - 40587) * 86400000) / 86400000;
+      const bright = 1 - 0.55 * Math.min(Math.max(age / 30, 0), 1);
+      col[i * 3] = rgb[0] * bright;
+      col[i * 3 + 1] = rgb[1] * bright;
+      col[i * 3 + 2] = rgb[2] * bright;
+      size[i] = 15 + Math.min(t.ndet, 40) * 0.35;
     }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
