@@ -70,8 +70,9 @@ async function setSurvey(entry: SurveyEntry): Promise<void> {
   for (const b of surveyButtons) b.classList.toggle('active', b.dataset.id === entry.id);
 }
 
-// --- UI: survey switcher ---
+// --- UI: survey switcher (PRO only — the public doesn't pick observatories; see auto-survey) ---
 const surveyRow = document.getElementById('surveys')!;
+surveyRow.classList.add('pro-only');
 const surveyButtons: HTMLButtonElement[] = SURVEYS.map((s) => {
   const b = document.createElement('button');
   b.textContent = s.name;
@@ -323,6 +324,7 @@ for (const preset of CATALOGS) {
 const clickNdc = new THREE.Vector3();
 const clickCamPos = new THREE.Vector3();
 const clickRd = { raRad: 0, decRad: 0 };
+const autoRd = { raRad: 0, decRad: 0 }; // public auto-survey view direction
 let downX = 0;
 let downY = 0;
 let downT = 0;
@@ -538,6 +540,18 @@ startLoop(renderer, (dt) => {
     hips.setCenter(rig.position);
     hips.setVisible(nearEarth);
     if (nearEarth) hips.update(camera);
+
+    // Public mode: auto-pick the deepest survey for the view (Pan-STARRS north / DES south),
+    // so detail "just appears" on zoom — the public never sees the observatory picker.
+    if (nearEarth && !isPro() && controls.fovDeg < 25) {
+      camera.getWorldDirection(viewDir);
+      worldToRaDec(viewDir, autoRd);
+      const wantId = (autoRd.decRad * RAD2DEG) > -28 ? 'panstarrs' : 'des';
+      if (currentSurvey.id !== wantId) {
+        const sv = SURVEYS.find((s) => s.id === wantId);
+        if (sv) void setSurvey(sv);
+      }
+    }
     else if (hips.tileCount) hips.clear();
 
     // transients: Earth-view only; refetch when the view pans far enough

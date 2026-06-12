@@ -1,78 +1,78 @@
-// Ingest the broker's CLASSIFIED all-sky alert population from ALeRCE and write it as a static
-// snapshot the app serves instantly (the broker already does detection + ML classification; we
-// just ingest oid / position / recency / class). The full-table lastmjd sort times out and the
-// broker throttles cone-grid bursts, but the CLASSIFIER-ordered query returns classified objects
-// across the whole sky fast — so we page through it. The runtime then tops this up LIVE near the
-// view (one fast cone). Re-runnable nightly (PHASE-8 cron). ZTF is the LSST precursor.
+// Ingest a recent all-sky alert snapshot from the ANTARES broker (NOIRLab) — the REAL Rubin/LSST
+// stream (+ ZTF), with community-filter tags. ANTARES's recent-sorted + paginated query is fast
+// and CORS-open (unlike ALeRCE's throttled cone grid), so a few pages give a solid all-sky
+// baseline. The runtime tops this up LIVE near the view. Re-runnable nightly (PHASE-8 cron).
 import { writeFileSync, mkdirSync } from 'node:fs';
 
-const BASE = 'https://api.alerce.online/ztf/v1/objects/';
-const PAGES = 3; // × page_size classified objects (tiny — the broker throttles bursts)
-const PAGE_SIZE = 250;
-
+const ANTARES = 'https://api.antares.noirlab.edu/v1';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function page(p, orderBy) {
-  // class_name is a required param but the broker returns objects of all classes ordered
-  // by the requested key — we read each object's real `class`. probability-ordered = the
-  // confidently-classified population; lastmjd-ordered = recent (catches new transients).
-  const url =
-    `${BASE}?classifier=lc_classifier&class_name=SNIa&probability=0.5` +
-    `&page=${p}&page_size=${PAGE_SIZE}&order_by=${orderBy}&order_mode=DESC&count=false`;
+function antaresCls(tags) {
+  for (const t of tags) {
+    const x = t.toLowerCase();
+    if (x.includes('transient') || x.includes('supernova') || x.includes('sn_')) return 'Transient';
+  }
+  return null;
+}
+
+const seen = new Map();
+function ingest(data) {
+  for (const o of data) {
+    const a = o.attributes ?? {};
+    const pr = a.properties ?? {};
+    if (a.ra == null || a.dec == null || seen.has(o.id)) continue;
+    const tags = a.tags ?? [];
+    seen.set(o.id, {
+      oid: o.id,
+      ra: a.ra,
+      dec: a.dec,
+      firstmjd: pr.oldest_alert_observation_time ?? pr.newest_alert_observation_time,
+      lastmjd: pr.newest_alert_observation_time,
+      ndet: pr.num_alerts ?? 1,
+      cls: antaresCls(tags),
+      tags,
+    });
+  }
+}
+async function get(url) {
   try {
-    const r = await fetch(url, { signal: AbortSignal.timeout(30000) });
-    if (r.ok) return (await r.json()).items ?? [];
+    const r = await fetch(url, { signal: AbortSignal.timeout(25000) });
+    if (r.ok) return (await r.json()).data ?? [];
   } catch {
     /* skip */
   }
   return [];
 }
 
-const seen = new Map();
-async function ingest(orderBy, pages) {
-  for (let p = 1; p <= pages; p++) {
-    const items = await page(p, orderBy);
-    for (const o of items) {
-      if (o.meanra == null) continue;
-      if (!seen.has(o.oid)) {
-        seen.set(o.oid, {
-          oid: String(o.oid),
-          ra: o.meanra,
-          dec: o.meandec,
-          firstmjd: o.firstmjd,
-          lastmjd: o.lastmjd,
-          ndet: o.ndet,
-          cls: o.class ?? null,
-        });
-      }
-    }
-    process.stdout.write(`  ${orderBy} page ${p}/${pages} · ${seen.size} unique alerts\n`);
-    if (!items.length) break;
-    await sleep(700);
-  }
+// recent LSST/ZTF alerts (genuinely "tonight")
+ingest(await get(`${ANTARES}/loci?sort=-properties.newest_alert_observation_time&page%5Bsize%5D=100`));
+console.log(`  recent → ${seen.size}`);
+
+// cone grid for an all-sky baseline (ANTARES cone search is fast + un-throttled)
+const cones = [];
+for (let dec = -24; dec <= 80; dec += 13) {
+  const nRa = Math.max(4, Math.round(16 * Math.cos((dec * Math.PI) / 180)));
+  for (let i = 0; i < nRa; i++) cones.push([(i * 360) / nRa, dec]);
+}
+for (let i = 0; i < cones.length; i++) {
+  const [ra, dec] = cones[i];
+  ingest(await get(`${ANTARES}/loci?filter%5Bcone%5D=${ra},${dec},6&page%5Bsize%5D=100`));
+  process.stdout.write(`  cone ${i + 1}/${cones.length} · ${seen.size} unique alerts\n`);
+  await sleep(120);
 }
 
-console.log('ingesting classified all-sky alerts (probability pass)…');
-await ingest('probability', PAGES); // the classified population, all sky
-
 const transients = [...seen.values()].sort((a, b) => b.lastmjd - a.lastmjd);
-const classified = transients.filter((t) => t.cls).length;
-const byClass = {};
-for (const t of transients) byClass[t.cls ?? 'null'] = (byClass[t.cls ?? 'null'] ?? 0) + 1;
-
+const lsst = transients.filter((t) => /lsst/i.test(t.oid) || (t.tags ?? []).some((g) => /lsst/i.test(g))).length;
 mkdirSync('public/transients', { recursive: true });
 writeFileSync(
   'public/transients/tonight.json',
   JSON.stringify({
     generated: new Date().toISOString(),
-    source: 'ALeRCE broker · ZTF alert stream (LSST precursor)',
-    survey: 'ZTF',
-    note: 'Classified all-sky snapshot; the app also queries the live broker near the view.',
+    source: 'ANTARES broker (NOIRLab) · Rubin/LSST + ZTF alert streams',
+    survey: 'ANTARES',
+    note: 'Recent all-sky snapshot; the app also queries the live ANTARES broker near the view.',
     count: transients.length,
-    classified,
-    byClass,
     transients,
   }),
 );
-console.log(`\nwrote ${transients.length} alerts (${classified} classified) → tonight.json`);
-console.log('classes:', byClass);
+console.log(`\nwrote ${transients.length} alerts (${lsst} LSST-tagged) → tonight.json`);

@@ -268,3 +268,23 @@ See [plan/AGENT_INSTRUCTIONS.md](../plan/AGENT_INSTRUCTIONS.md) §6.
   remains the working source.
 - **UX fixes:** bottom status line stacked above attribution (overlap gone); the WASD/QE hint is
   spelled out on desktop and replaced with "pinch to zoom · tap to identify" on touch.
+
+## 2026-06-12 — ANTARES primary broker + simpler public mode
+
+- **ANTARES (NOIRLab) is now the primary alert broker** (`BROKER='antares'` in transients.ts) —
+  it carries the **real Rubin/LSST alert stream** (`lsst:` alert ids) plus ZTF, with community-
+  filter **tags** (e.g. `high_amplitude_variable_star_candidate`, `lsst_scimma_quality_transient`,
+  `lantern_xgboost` classifier), light curves (CSV), catalogue cross-matches and thumbnails —
+  fuller than ALeRCE-ZTF and CORS-open. ALeRCE-ZTF kept as the alternate (`BROKER='ztf'`).
+  Verified: ANT2020suiq → tags + 1188 detections + light curve in the panel.
+  - cone search = `filter[cone]=ra,dec,radiusDeg` (caps ~10 loci/region); light curve from
+    `/loci/{id}` `attributes.lightcurve` CSV (`ant_mjd`,`ant_passband`,`ant_mag`; empty mag = upper
+    limit). Tags shown in the panel; `fetchProbabilities` short-circuits (ANTARES is tag-based).
+  - Snapshot (`tools/build-transients.mjs`) rebuilt from ANTARES (recent pass + cone grid). The
+    recent LSST window + cone caps make the all-sky baseline modest; the runtime live cone fills in
+    per region, and each alert is richer. Honest trade: ANTARES = fewer-but-fuller vs ZTF's bulk.
+- **Public (Explore) mode is now genuinely simple:** the observatory/survey picker is `.pro-only`
+  (hidden), and an **auto-survey** picks the deepest survey for the view by declination
+  (Pan-STARRS north / DES south) so telescope detail "just appears" on zoom — verified
+  (survey row hidden, attribution auto-switched to Pan-STARRS). The public never sees observatory
+  names. Alerts/ingest are Pro-only.

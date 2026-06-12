@@ -10,17 +10,15 @@
  * offline fallback. IDs are kept as STRINGS (ZTF oid; LSST diaObjectId is int64 > 2^53).
  */
 
-const ADAPTERS = {
-  ztf: {
-    label: 'ZTF (LSST precursor)',
-    objects: 'https://api.alerce.online/ztf/v1/objects/',
-    page: (oid: string) => `https://alerce.online/object/${oid}`,
-  },
-  // lsst: ready to enable when api-lsst.alerce.online/list_objects stabilises.
-} as const;
+// Broker. ANTARES (NOIRLab) is the primary: it carries the REAL Rubin/LSST alert stream (plus
+// ZTF), community-filter TAGS, catalogue cross-matches and thumbnails — fuller than ALeRCE-ZTF,
+// CORS-open, and its recent-all-sky + cone queries are fast (no burst throttle). ALeRCE-ZTF is
+// kept as an alternate. IDs are strings (LSST diaObjectId is int64 > 2^53).
+type Broker = 'antares' | 'ztf';
+const BROKER: Broker = 'antares';
 
-const SURVEY: keyof typeof ADAPTERS = 'ztf';
-const A = ADAPTERS[SURVEY];
+const ANTARES = 'https://api.antares.noirlab.edu/v1';
+const ALERCE = 'https://api.alerce.online/ztf/v1/objects/';
 
 export interface Transient {
   oid: string;
@@ -30,6 +28,8 @@ export interface Transient {
   lastMjd: number;
   ndet: number;
   cls: string | null;
+  /** ANTARES community-filter tags (classification/quality), if any. */
+  tags?: string[];
 }
 
 export interface LcPoint {
@@ -63,7 +63,7 @@ export const GROUP_LIST: TransientGroup[] = ['transient', 'agn', 'periodic', 'st
 export function classGroup(cls: string | null): TransientGroup {
   if (!cls) return 'other';
   const c = cls.toUpperCase();
-  if (c.startsWith('SN') || c.includes('SLSN')) return 'transient';
+  if (c.startsWith('SN') || c.includes('SLSN') || c.includes('TRANSIENT')) return 'transient';
   if (c === 'AGN' || c === 'QSO' || c === 'BLAZAR') return 'agn';
   if (c === 'YSO' || c === 'CV/NOVA' || c === 'CV' || c === 'NOVA') return 'stochastic';
   if (
@@ -74,8 +74,20 @@ export function classGroup(cls: string | null): TransientGroup {
   return 'other';
 }
 
-export const surveyLabel = A.label;
-export const objectPageUrl = (oid: string): string => A.page(oid);
+export const surveyLabel =
+  BROKER === 'antares' ? 'ANTARES · Rubin/LSST + ZTF' : 'ALeRCE · ZTF (LSST precursor)';
+export const objectPageUrl = (oid: string): string =>
+  BROKER === 'antares' ? `https://antares.noirlab.edu/loci/${oid}` : `https://alerce.online/object/${oid}`;
+
+/** ANTARES tags → a coarse class label for marker colouring (tags drive the panel detail). */
+function antaresCls(tags: string[]): string | null {
+  for (const t of tags) {
+    const x = t.toLowerCase();
+    if (x.includes('transient') || x.includes('supernova') || x.includes('sn_')) return 'Transient';
+  }
+  return null;
+}
+const PB_FID: Record<string, number> = { u: 1, g: 1, r: 2, R: 2, i: 3, z: 3, y: 3 };
 
 // ---- tiny rate limiter (3/s; ALeRCE is a separate host from CDS) ----
 let tokens = 3;
@@ -110,22 +122,50 @@ export async function fetchNear(
   if (cached && Date.now() - cached.t < CONE_TTL_MS) return cached.data;
 
   await acquire();
-  const radiusArcsec = Math.min(radiusDeg * 3600, 36000); // cap 10°
-  const url =
-    `${A.objects}?ra=${raDeg}&dec=${decDeg}&radius=${radiusArcsec}` +
-    `&page=1&page_size=40&order_by=lastmjd&order_mode=DESC&count=false`;
-  const r = await fetch(url, signal ? { signal } : {});
-  if (!r.ok) throw new Error(`broker ${r.status}`);
-  const j = (await r.json()) as { items?: Record<string, unknown>[] };
-  const out: Transient[] = (j.items ?? []).map((o) => ({
-    oid: String(o['oid']),
-    raDeg: Number(o['meanra']),
-    decDeg: Number(o['meandec']),
-    firstMjd: Number(o['firstmjd']),
-    lastMjd: Number(o['lastmjd']),
-    ndet: Number(o['ndet'] ?? 0),
-    cls: (o['class'] as string) ?? null,
-  }));
+  let out: Transient[];
+  if (BROKER === 'antares') {
+    const rad = Math.min(radiusDeg, 10);
+    const url =
+      `${ANTARES}/loci?filter%5Bcone%5D=${raDeg},${decDeg},${rad}` +
+      `&page%5Bsize%5D=100&sort=-properties.newest_alert_observation_time`;
+    const r = await fetch(url, signal ? { signal } : {});
+    if (!r.ok) throw new Error(`ANTARES ${r.status}`);
+    const j = (await r.json()) as { data?: { id: string; attributes: Record<string, unknown> }[] };
+    out = (j.data ?? [])
+      .map((o) => {
+        const a = o.attributes;
+        const p = (a['properties'] ?? {}) as Record<string, number>;
+        const tags = (a['tags'] as string[]) ?? [];
+        return {
+          oid: o.id,
+          raDeg: Number(a['ra']),
+          decDeg: Number(a['dec']),
+          firstMjd: Number(p['oldest_alert_observation_time'] ?? p['newest_alert_observation_time']),
+          lastMjd: Number(p['newest_alert_observation_time']),
+          ndet: Number(p['num_alerts'] ?? 1),
+          cls: antaresCls(tags),
+          tags,
+        };
+      })
+      .filter((t) => isFinite(t.raDeg) && isFinite(t.decDeg));
+  } else {
+    const radiusArcsec = Math.min(radiusDeg * 3600, 36000);
+    const url =
+      `${ALERCE}?ra=${raDeg}&dec=${decDeg}&radius=${radiusArcsec}` +
+      `&page=1&page_size=40&order_by=lastmjd&order_mode=DESC&count=false`;
+    const r = await fetch(url, signal ? { signal } : {});
+    if (!r.ok) throw new Error(`broker ${r.status}`);
+    const j = (await r.json()) as { items?: Record<string, unknown>[] };
+    out = (j.items ?? []).map((o) => ({
+      oid: String(o['oid']),
+      raDeg: Number(o['meanra']),
+      decDeg: Number(o['meandec']),
+      firstMjd: Number(o['firstmjd']),
+      lastMjd: Number(o['lastmjd']),
+      ndet: Number(o['ndet'] ?? 0),
+      cls: (o['class'] as string) ?? null,
+    }));
+  }
   coneCache.set(key, { data: out, t: Date.now() });
   return out;
 }
@@ -145,7 +185,32 @@ export async function fetchLightcurve(oid: string, signal?: AbortSignal): Promis
   const cached = lcCache.get(oid);
   if (cached) return cached;
   await acquire();
-  const r = await fetch(`${A.objects}${encodeURIComponent(oid)}/lightcurve`, signal ? { signal } : {});
+
+  if (BROKER === 'antares') {
+    const r = await fetch(`${ANTARES}/loci/${encodeURIComponent(oid)}`, signal ? { signal } : {});
+    if (!r.ok) throw new Error(`ANTARES locus ${r.status}`);
+    const j = (await r.json()) as { data?: { attributes?: { lightcurve?: string } } };
+    const csv = j.data?.attributes?.lightcurve ?? '';
+    const lines = csv.split('\n');
+    const hdr = lines[0]?.split(',') ?? [];
+    const iMjd = hdr.indexOf('ant_mjd');
+    const iMag = hdr.indexOf('ant_mag');
+    const iPb = hdr.indexOf('ant_passband');
+    const points: LcPoint[] = [];
+    for (let i = 1; i < lines.length; i++) {
+      const f = lines[i]!.split(',');
+      const mjd = parseFloat(f[iMjd]!);
+      const mag = parseFloat(f[iMag]!); // empty = upper limit (non-detection) → skipped
+      if (!isFinite(mjd) || !isFinite(mag)) continue;
+      points.push({ mjd, mag, fid: PB_FID[f[iPb]!] ?? 2 });
+    }
+    points.sort((a, b) => a.mjd - b.mjd);
+    const lc: Lightcurve = { points, drb: null, rb: null };
+    lcCache.set(oid, lc);
+    return lc;
+  }
+
+  const r = await fetch(`${ALERCE}${encodeURIComponent(oid)}/lightcurve`, signal ? { signal } : {});
   if (!r.ok) throw new Error(`lightcurve ${r.status}`);
   const j = (await r.json()) as { detections?: Record<string, unknown>[] };
   const dets = j.detections ?? [];
@@ -179,10 +244,11 @@ const probCache = new Map<string, ClassProb[]>();
 
 /** The broker's ML classifier outputs for one object (all classifiers, ranked). */
 export async function fetchProbabilities(oid: string, signal?: AbortSignal): Promise<ClassProb[]> {
+  if (BROKER === 'antares') return []; // ANTARES classification is tag-based (shown in the panel)
   const cached = probCache.get(oid);
   if (cached) return cached;
   await acquire();
-  const r = await fetch(`${A.objects}${encodeURIComponent(oid)}/probabilities`, signal ? { signal } : {});
+  const r = await fetch(`${ALERCE}${encodeURIComponent(oid)}/probabilities`, signal ? { signal } : {});
   if (!r.ok) throw new Error(`probabilities ${r.status}`);
   const j = (await r.json()) as Record<string, unknown>[];
   const out: ClassProb[] = j
@@ -218,7 +284,7 @@ export function topClasses(probs: ClassProb[], n = 3): ClassProb[] {
 export async function loadSnapshot(): Promise<Transient[]> {
   try {
     const j = (await (await fetch('transients/tonight.json')).json()) as {
-      transients: { oid: string; ra: number; dec: number; firstmjd: number; lastmjd: number; ndet: number; cls: string | null }[];
+      transients: { oid: string; ra: number; dec: number; firstmjd: number; lastmjd: number; ndet: number; cls: string | null; tags?: string[] }[];
     };
     return j.transients.map((t) => ({
       oid: t.oid,
@@ -228,6 +294,7 @@ export async function loadSnapshot(): Promise<Transient[]> {
       lastMjd: t.lastmjd,
       ndet: t.ndet,
       cls: t.cls,
+      tags: t.tags,
     }));
   } catch {
     return [];

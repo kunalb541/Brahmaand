@@ -208,11 +208,22 @@ export class ObjectPanel {
     const lastSeen = mjdToDate(t.lastMjd).toISOString().slice(0, 10);
     const cutout = cutoutUrl({ hipsId: 'CDS/P/DSS2/color', raDeg: t.raDeg, decDeg: t.decDeg, fovDeg: 0.05 });
 
+    // ANTARES community-filter tags (the "fuller" info: classifier/quality filters that fired)
+    const tagsHtml = t.tags?.length
+      ? `<div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:4px">${t.tags
+          .map(
+            (g) =>
+              `<span style="background:rgba(90,140,230,.35);border-radius:5px;padding:1px 6px;font-size:9.5px;color:#dce">${escapeHtml(g)}</span>`,
+          )
+          .join('')}</div>`
+      : '';
+
     const head =
       `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">` +
       `<b style="font-size:13px;color:#fff">${escapeHtml(t.oid)}</b>` +
-      `<span style="background:rgba(60,200,210,.35);border-radius:5px;padding:1px 6px;font-size:10px">transient</span></div>` +
-      `<div style="color:#7fe3e8;margin-top:2px">${escapeHtml(t.cls ?? 'unclassified')}</div>` +
+      `<span style="background:rgba(60,200,210,.35);border-radius:5px;padding:1px 6px;font-size:10px">alert</span></div>` +
+      (t.cls ? `<div style="color:#ff9b6f;margin-top:2px">${escapeHtml(t.cls)}</div>` : '') +
+      tagsHtml +
       `<div style="margin-top:6px;color:#bcd">${formatRaHms(t.raDeg)}&nbsp;&nbsp;${formatDecDms(t.decDeg)}</div>` +
       `<div style="color:#7f93b5">last seen ${lastSeen} · ${age < 1 ? 'today' : Math.round(age) + ' d ago'} · ${t.ndet} detection${t.ndet === 1 ? '' : 's'}</div>`;
 
