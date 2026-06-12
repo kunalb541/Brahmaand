@@ -6,8 +6,7 @@ dist/
 tools/pipeline/.venv/
 tools/pipeline/data/
 data-src/
-# Capacitor native projects are generated (npx cap add ios) — regenerate, don't commit
-/ios
-/android
+# Capacitor native projects ARE committed (ios/, android/) — their own template
+# .gitignores exclude build artifacts (Pods, build/, synced web assets, .gradle…)
 .capacitor/
 

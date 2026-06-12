@@ -208,3 +208,25 @@ See [plan/AGENT_INSTRUCTIONS.md](../plan/AGENT_INSTRUCTIONS.md) §6.
 - **Deferred (Phase B remainder):** quantitative FITS mode (hips2fits `format=fits` → pixel readout
   + stretch + colormap), export (FITS/CSV/VOTable/PNG), blink/compare, engine texture-array pool +
   worker decode + exact curved cells.
+
+## 2026-06-12 — ML classifications, dual mode, native iOS + Android projects
+
+- **Broker ML surfaced** (the user's "their ML algo + flagged or not"): per-object
+  `/probabilities` (ALeRCE classifiers — `lc_classifier` + forced-photometry betas; CORS-verified)
+  → class chip "Class NN% · ML: lc_classifier" + pro top-3 ranking; **ZTF real-bogus** from
+  detections (`drb` deep-learning score, `rb` fallback) → "✓ likely real / ~ uncertain /
+  ⚠ possibly bogus" with the score. Verified live (ZTF19abbtwvp → Periodic-Other 20%, drb 0.05 ⚠).
+  `bestClass` = ranking-1 of `lc_classifier`. Classifier-filtered cone queries also verified
+  (note: the filter matches any classifier version; per-object probabilities are authoritative).
+- **Pro/Public dual mode** (`src/config/mode.ts`): one codebase, two experiences. `?mode=` URL
+  param (persists) or the ◆ PRO ⇄ ◇ Explore toggle; `.pro-only` elements (catalogs row, RA/Dec
+  readout, fps/tile status, exposure, classifier detail) hidden in public. Two store listings can
+  bake different defaults via the shell URL. Default = pro (customers are professionals first).
+  Fixed a TDZ boot-killer (applyMode called before `const modeBtn` initialized — module-level
+  ReferenceError silently stopped everything after it, including startLoop).
+- **Native projects committed** (`ios/` via **SPM** — no CocoaPods; `android/` Gradle), generated
+  by `cap add`, synced with the current build; template .gitignores exclude artifacts.
+  **Honest status:** "Xcode is installed" wasn't true on disk yet (no Xcode.app found; CLT only —
+  likely still downloading), and there's no Java/Android SDK — so the **binary builds are
+  user-side**: docs/IOS.md + docs/ANDROID.md are one-click runbooks (`ios:sync`/`ios:open`,
+  `android:sync`/`android:open`).

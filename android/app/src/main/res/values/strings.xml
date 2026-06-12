@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Brahmaand</string>
+    <string name="title_activity_main">Brahmaand</string>
+    <string name="package_name">com.kunalbhatia.brahmaand</string>
+    <string name="custom_url_scheme">com.kunalbhatia.brahmaand</string>
+</resources>
