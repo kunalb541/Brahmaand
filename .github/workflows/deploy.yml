@@ -1,4 +1,9 @@
-name: Deploy to GitHub Pages
+name: CI / Deploy
+
+# On every push to main: run typecheck + tests + build (fast green CI).
+# Deploy to GitHub Pages only on a manual run (workflow_dispatch) — so pushes don't fail when
+# Pages is disabled (the repo is private and not published yet). To go live: enable Pages
+# (Settings → Pages → Source: GitHub Actions), then run this workflow from the Actions tab.
 
 on:
   push:
@@ -27,13 +32,17 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
+      # Pages-artifact steps run only when deploying manually (avoids red ✗ on normal pushes).
+      - if: github.event_name == 'workflow_dispatch'
+        uses: actions/configure-pages@v5
+      - if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-pages-artifact@v3
         with:
           path: dist
 
   deploy:
     needs: build
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
