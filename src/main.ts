@@ -11,6 +11,8 @@ import { StarLabels } from './sky/starLabels';
 import { StarField } from './stars/starField';
 import { TransientLayer } from './sky/transientLayer';
 import { fetchNear, loadSnapshot, type Transient } from './data/transients';
+import { CatalogOverlay } from './sky/catalogOverlay';
+import { CATALOGS, fetchCatalog, type CatalogPreset } from './data/vizier';
 import { FlyControls } from './core/flyControls';
 import { XRInput } from './core/xrInput';
 import { SkyReadout } from './ui/readout';
@@ -124,7 +126,8 @@ flyRow.className = 'row';
 flyRow.innerHTML =
   '<label style="font-size:11px;display:flex;align-items:center;gap:6px">exposure ' +
   '<input id="exposure" type="range" min="-3" max="3" step="0.1" value="0" style="width:90px"></label>' +
-  '<button id="return-earth">Return to Earth</button>';
+  '<button id="return-earth">Return to Earth</button>' +
+  '<button id="share-view" title="copy a link to this exact view">⌁ Share</button>';
 document.getElementById('hud')!.insertBefore(flyRow, document.querySelector('#hud .hint'));
 (document.getElementById('exposure') as HTMLInputElement).addEventListener('input', (e) => {
   const stops = parseFloat((e.target as HTMLInputElement).value);
@@ -133,6 +136,19 @@ document.getElementById('hud')!.insertBefore(flyRow, document.querySelector('#hu
 document.getElementById('return-earth')!.addEventListener('click', () => {
   fly.reset();
   controls.fovDeg = 70;
+});
+const shareBtn = document.getElementById('share-view')!;
+shareBtn.addEventListener('click', () => {
+  const url = location.origin + location.pathname + currentViewHash();
+  history.replaceState(null, '', url);
+  void navigator.clipboard?.writeText(url).then(
+    () => {
+      const o = shareBtn.textContent;
+      shareBtn.textContent = '✓ Copied';
+      setTimeout(() => (shareBtn.textContent = o), 1200);
+    },
+    () => {},
+  );
 });
 document.querySelector('#hud .hint')!.textContent =
   'Drag to look · scroll to zoom · WASD/QE to fly · click a star to identify';
@@ -186,6 +202,48 @@ tonightBtn.addEventListener('click', () => {
   }
 });
 
+// --- VizieR multiwavelength catalogue overlays ---
+const catalogOverlay = new CatalogOverlay(scene);
+const activeCatalogs = new Map<string, CatalogPreset>();
+const lastCatFetchDir = new THREE.Vector3(2, 0, 0);
+const catRd = { raRad: 0, decRad: 0 };
+
+async function fetchCatalogNearView(preset: CatalogPreset): Promise<void> {
+  camera.getWorldDirection(viewDir);
+  worldToRaDec(viewDir, catRd);
+  const radius = Math.min(Math.max(controls.fovDeg / 1.5, 0.05), 1.0);
+  try {
+    const src = await fetchCatalog(preset, catRd.raRad * RAD2DEG, catRd.decRad * RAD2DEG, radius);
+    if (activeCatalogs.has(preset.id)) catalogOverlay.setCatalog(preset.id, preset.name, preset.color, src);
+  } catch (e) {
+    console.warn(`catalog ${preset.id} fetch failed`, e);
+  }
+}
+
+const catRow = document.createElement('div');
+catRow.className = 'row';
+catRow.innerHTML = '<span style="font-size:11px;color:#7f93b5;align-self:center">Catalogs:</span>';
+document.getElementById('hud')!.insertBefore(catRow, document.querySelector('#hud .hint'));
+for (const preset of CATALOGS) {
+  const b = document.createElement('button');
+  b.textContent = preset.name;
+  b.title = `${preset.band} · VizieR ${preset.table}`;
+  b.style.borderColor = '#' + preset.color.toString(16).padStart(6, '0');
+  b.addEventListener('click', () => {
+    if (activeCatalogs.has(preset.id)) {
+      activeCatalogs.delete(preset.id);
+      catalogOverlay.remove(preset.id);
+      b.classList.remove('active');
+    } else {
+      activeCatalogs.set(preset.id, preset);
+      b.classList.add('active');
+      fly.reset();
+      void fetchCatalogNearView(preset);
+    }
+  });
+  catRow.appendChild(b);
+}
+
 // click (not drag) → sky direction → identify
 const clickNdc = new THREE.Vector3();
 const clickCamPos = new THREE.Vector3();
@@ -235,6 +293,7 @@ addEventListener('resize', () => {
   const h = renderer.getDrawingBufferSize(new THREE.Vector2()).y;
   for (const sf of starFields) sf.setPixelScale(h);
   transientLayer.setPixelScale(h);
+  catalogOverlay.setPixelScale(h);
 });
 
 // --- Dev helper: window.goto(raDeg, decDeg) ---
@@ -244,6 +303,31 @@ declare global {
   }
 }
 window.goto = (raDeg, decDeg) => controls.pointAt(raDeg * DEG2RAD, decDeg * DEG2RAD);
+
+// --- Shareable deep-link views (URL hash: #ra=..&dec=..&fov=..&survey=..) ---
+const shareRd = { raRad: 0, decRad: 0 };
+const shareDir = new THREE.Vector3();
+function currentViewHash(): string {
+  camera.getWorldDirection(shareDir);
+  worldToRaDec(shareDir, shareRd);
+  return `#ra=${(shareRd.raRad * RAD2DEG).toFixed(4)}&dec=${(shareRd.decRad * RAD2DEG).toFixed(4)}&fov=${controls.fovDeg.toFixed(3)}&survey=${currentSurvey.id}`;
+}
+function applyViewHash(): void {
+  const h = location.hash.replace(/^#/, '');
+  if (!h) return;
+  const p = new URLSearchParams(h);
+  const ra = parseFloat(p.get('ra') ?? '');
+  const dec = parseFloat(p.get('dec') ?? '');
+  if (isFinite(ra) && isFinite(dec)) {
+    const surveyId = p.get('survey');
+    const sv = SURVEYS.find((s) => s.id === surveyId);
+    if (sv && sv.id !== currentSurvey.id) void setSurvey(sv);
+    const fov = parseFloat(p.get('fov') ?? '');
+    controls.pointAt(ra * DEG2RAD, dec * DEG2RAD);
+    if (isFinite(fov)) controls.fovDeg = fov;
+  }
+}
+addEventListener('hashchange', applyViewHash);
 // debug handle
 (window as unknown as { __dbg: unknown }).__dbg = {
   hips,
@@ -254,15 +338,20 @@ window.goto = (raDeg, decDeg) => controls.pointAt(raDeg * DEG2RAD, decDeg * DEG2
   fly,
   transientLayer,
   tonightBtn,
+  catalogOverlay,
+  activeCatalogs,
 };
-transientLayer.setPixelScale(renderer.getDrawingBufferSize(new THREE.Vector2()).y);
+const _h0 = renderer.getDrawingBufferSize(new THREE.Vector2()).y;
+transientLayer.setPixelScale(_h0);
+catalogOverlay.setPixelScale(_h0);
 
 // --- Boot ---
 setSurvey(currentSurvey)
   .then(() => {
     loadingEl.style.opacity = '0';
     setTimeout(() => loadingEl.remove(), 600);
-    controls.pointAt(83.82 * DEG2RAD, -5.39 * DEG2RAD); // start looking at Orion
+    if (location.hash.includes('ra=')) applyViewHash(); // restore a shared view
+    else controls.pointAt(83.82 * DEG2RAD, -5.39 * DEG2RAD); // default: Orion
   })
   .catch((e) => {
     loadingEl.textContent = 'Failed to load sky imagery — see console.';
@@ -367,6 +456,18 @@ startLoop(renderer, (dt) => {
       if (viewDir.angleTo(lastFetchDir) > 0.06) {
         lastFetchDir.copy(viewDir);
         void fetchTransientsNearView();
+      }
+    }
+
+    // catalogue overlays: Earth-view; refetch around the new view when panned
+    catalogOverlay.setCenter(rig.position);
+    const showCats = activeCatalogs.size > 0 && f > 0.5;
+    catalogOverlay.setVisible(showCats);
+    if (showCats) {
+      camera.getWorldDirection(viewDir);
+      if (viewDir.angleTo(lastCatFetchDir) > 0.05) {
+        lastCatFetchDir.copy(viewDir);
+        for (const p of activeCatalogs.values()) void fetchCatalogNearView(p);
       }
     }
 

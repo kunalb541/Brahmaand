@@ -190,3 +190,21 @@ See [plan/AGENT_INSTRUCTIONS.md](../plan/AGENT_INSTRUCTIONS.md) §6.
 - **Mobile UX (verified in browser):** pinch-to-zoom (two-finger → FOV; 70°→17.5° on a 4× spread),
   resume-look on finger lift, `viewport-fit=cover` + safe-area insets, HUD collapses to a chip on
   phones (<560 px). Full bottom-sheet redesign deferred to a later UX pass.
+
+## 2026-06-12 — V2 Phase B (research features, part 1)
+
+- **VizieR multiwavelength catalogue overlay** (src/data/vizier.ts + src/sky/catalogOverlay.ts):
+  toggle any of Gaia DR3 (optical), 2MASS (near-IR), AllWISE (mid-IR), Chandra CSC2 (X-ray) as
+  coloured dot markers over the current field; several at once for cross-band comparison. VizieR TAP
+  cone queries (CORS `*`, JSON — verified 2026-06-12, column names per-catalogue verified). Markers
+  use the same `raDecToWorld` as everything else (aligned by construction); fetch follows the view,
+  rate-limited, cached. **Known cap artifact:** `TOP 1500` returns a spatially-biased subset in
+  pathologically dense fields (e.g. a globular core); fine on normal fields. Auto best-survey MOC
+  compositing and a per-marker catalogue-row popup are follow-ups.
+- **Shareable deep-link views** (URL hash `#ra&dec&fov&survey`): a ⌁ Share button copies a link to
+  the exact view; opening such a link restores RA/Dec + FOV + survey on boot (verified: reload with
+  a hash → camera + FOV + Pan-STARRS all restored). The key research-collaboration primitive
+  ("here's the field I'm looking at").
+- **Deferred (Phase B remainder):** quantitative FITS mode (hips2fits `format=fits` → pixel readout
+  + stretch + colormap), export (FITS/CSV/VOTable/PNG), blink/compare, engine texture-array pool +
+  worker decode + exact curved cells.
