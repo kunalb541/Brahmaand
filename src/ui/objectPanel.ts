@@ -44,13 +44,13 @@ export class ObjectPanel {
   private abort: AbortController | null = null;
 
   constructor(private opts: PanelOpts) {
-    // search box (top-centre)
+    // search box (top-right — clears the top-left HUD/labels/share; stacks above the info panel)
     const search = document.createElement('div');
     search.style.cssText =
-      'position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:11;display:flex;gap:6px';
+      'position:fixed;top:10px;right:10px;z-index:11;display:flex;gap:6px';
     search.innerHTML =
       '<input id="obj-search" type="search" placeholder="Search: M31, Sirius, NGC 6543…" ' +
-      'style="width:280px;font:13px ui-monospace,monospace;color:#dcebff;background:rgba(6,12,24,.8);' +
+      'style="width:min(280px,calc(100vw - 32px));font:13px ui-monospace,monospace;color:#dcebff;background:rgba(6,12,24,.8);' +
       'border:1px solid rgba(120,170,255,.35);border-radius:8px;padding:7px 10px;outline:none">';
     document.body.appendChild(search);
     this.input = search.querySelector('input')!;
@@ -272,7 +272,7 @@ export class ObjectPanel {
           `<img src="${cutout}" loading="lazy" alt="field" style="display:block;width:100%;border-radius:8px;background:#000;aspect-ratio:1">` +
           `<div style="position:absolute;left:50%;top:50%;width:34px;height:34px;margin:-17px 0 0 -17px;border:1.5px solid #6fe3ff;border-radius:50%;box-shadow:0 0 6px #6fe3ff,inset 0 0 4px #6fe3ff;pointer-events:none"></div>` +
           `</div>` +
-          `<div style="margin-top:8px"><a href="${objectPageUrl(t.oid)}" target="_blank" rel="noopener" style="color:#8aa6d6">${brokerName} object ↗</a></div>` +
+          `<div style="margin-top:8px"><a href="${objectPageUrl(t.oid)}" target="_blank" rel="noopener" style="color:#8aa6d6">${brokerName()} object ↗</a></div>` +
           this.transientFooter(),
       );
     } catch (e) {
@@ -283,7 +283,7 @@ export class ObjectPanel {
   }
 
   private transientFooter(): string {
-    return `<div style="margin-top:8px;color:#5f7494;font-size:10px;border-top:1px solid rgba(120,170,255,.12);padding-top:6px">Live: ${escapeHtml(surveyLabel)}</div>`;
+    return `<div style="margin-top:8px;color:#5f7494;font-size:10px;border-top:1px solid rgba(120,170,255,.12);padding-top:6px">Live: ${escapeHtml(surveyLabel())}</div>`;
   }
 
   private footer(): string {

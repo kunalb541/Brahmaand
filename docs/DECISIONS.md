@@ -288,3 +288,31 @@ See [plan/AGENT_INSTRUCTIONS.md](../plan/AGENT_INSTRUCTIONS.md) §6.
   (Pan-STARRS north / DES south) so telescope detail "just appears" on zoom — verified
   (survey row hidden, attribution auto-switched to Pan-STARRS). The public never sees observatory
   names. Alerts/ingest are Pro-only.
+
+## 2026-06-12 — broker is a runtime toggle (ZTF default, LSST toggle) + GPS/gyro real-sky registration
+
+- **Broker is now a runtime toggle, defaulting to dense ZTF.** Per the user ("ingest all alerts —
+  does not have to be LSST, can be ZTF; LSST should be future or a toggle, or together with ZTF"):
+  `activeBroker` (in transients.ts) defaults to **`'ztf'`** (ALeRCE) and a Pro **`⚡ ZTF ⇄ 🔭 LSST`**
+  button flips to **`'antares'`** (Rubin/LSST). `setBroker()` clears the cone/lc/prob caches;
+  `brokerName()`/`surveyLabel()`/`objectPageUrl()` are now functions of the active broker, and
+  `loadSnapshot(broker)` loads the matching snapshot. Verified both ways in-browser (ZTF → 1146
+  classified markers; LSST → the ANTARES set).
+- **Dense classified ZTF snapshot (`tools/build-transients-ztf.mjs`).** Instead of a cone grid
+  (ALeRCE throttles those), it pulls the most-recent objects of **each lc_classifier class**
+  (SNIa/SNIbc/SNII/SLSN · QSO/AGN/Blazar/YSO/CV-Nova · LPV/E/DSCT/RRL/CEP/Periodic-Other) — one
+  request per class, spaced out. Result: **1146 already-classified all-sky alerts** spanning every
+  group, dec −28°→+83°, each keeping its ML class for marker colour. → `public/transients/tonight.json`.
+  ANTARES snapshot kept as `public/transients/tonight-antares.json`. This is the "ingest all alerts,
+  all classifications" ask, robust to throttling. ZTF is a northern survey (dec ≳ −28°); the deep
+  south is covered by the imagery survey ladder and by the ANTARES/LSST toggle.
+- **GPS + gyro/compass real-sky registration (`deviceSky.ts`).** The phone magic-window now has two
+  modes, picked automatically: **ABSOLUTE** — altitude from the gravity-referenced gyro, azimuth
+  from the compass (`webkitCompassHeading` on iOS / absolute `alpha` on Android), observer lat/lon
+  from GPS, and Local Sidereal Time → real (RA, Dec) via the standard horizon→equatorial transform;
+  hold the phone up and it shows the actual sky overhead and auto-switches N↔S. **RELATIVE** — the
+  prior gyro-only window when GPS/compass are denied/unsupported. Altitude is exact; the azimuth
+  `AZ_SIGN`/`AZ_OFFSET_DEG` knobs are the one thing to calibrate against a known star on a real phone.
+  iOS `Info.plist` gained `NSLocationWhenInUseUsageDescription` + `NSMotionUsageDescription`; Android
+  manifest gained `ACCESS_*_LOCATION` + compass/location `uses-feature` (optional). On-device.
+- **UX:** search box moved top-right (was top-centre, overlapped the top-left HUD on narrow widths).

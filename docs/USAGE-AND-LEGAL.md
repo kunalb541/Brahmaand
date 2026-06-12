@@ -49,8 +49,9 @@ Ship these (the About panel does; repeat them in any paper/product built on the 
 - **Catalogues / object data:** "CDS/SIMBAD", "CDS/VizieR" (DOI 10.26093/cds/vizier); Gaia DR3 —
   "ESA/Gaia/DPAC, CC BY-SA 3.0 IGO"; distances — Bailer-Jones et al. 2021; bright stars/names —
   HYG / ATHYG (CC BY-SA 4.0).
-- **Alerts:** "ANTARES broker, NOIRLab" (and the underlying **Vera C. Rubin Observatory / LSST**
-  and **ZTF** alert streams + their classifiers); ALeRCE when used.
+- **Alerts:** "ALeRCE broker" (default — **ZTF** alert stream + `lc_classifier` ML classes) and
+  "ANTARES broker, NOIRLab" (the **Vera C. Rubin Observatory / LSST** + ZTF streams + community
+  filters), selectable in-app. Credit the underlying surveys (ZTF; Rubin/LSST) and the broker in use.
 - **Constellations:** d3-celestial © Olaf Frohn (BSD-3-Clause).
 
 Full per-asset licenses: [DATA-LICENSES.md](../DATA-LICENSES.md).

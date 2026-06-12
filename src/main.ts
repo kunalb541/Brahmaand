@@ -13,6 +13,8 @@ import { TransientLayer } from './sky/transientLayer';
 import {
   fetchNear,
   loadSnapshot,
+  getBroker,
+  setBroker,
   GROUP_LIST,
   GROUP_LABEL,
   GROUP_COLOR,
@@ -177,12 +179,22 @@ if (isTouch) {
     'font:12px ui-monospace,monospace;color:#dcebff;background:rgba(40,70,130,.6);border:1px solid rgba(120,170,255,.4);' +
     'border-radius:18px;padding:7px 14px';
   document.body.appendChild(gyroBtn);
+  let gyroPoll: ReturnType<typeof setInterval> | null = null;
   gyroBtn.addEventListener('click', async () => {
     if (deviceSky.enabled) {
       deviceSky.disable();
       gyroBtn.style.background = 'rgba(40,70,130,.6)';
+      gyroBtn.textContent = '📱 Move-to-look';
+      if (gyroPoll) {
+        clearInterval(gyroPoll);
+        gyroPoll = null;
+      }
     } else if (await deviceSky.enable()) {
       gyroBtn.style.background = 'rgba(90,140,230,.85)';
+      // reflect whether a real-sky (GPS+compass) lock came through, or relative-only
+      gyroPoll = setInterval(() => {
+        gyroBtn.textContent = deviceSky.absolute ? '📡 Sky-locked (GPS)' : '📱 Move-to-look';
+      }, 1000);
     } else {
       gyroBtn.textContent = '📱 motion blocked';
     }
@@ -269,9 +281,35 @@ async function fetchTransientsNearView(): Promise<void> {
 
 const tonightBtn = document.createElement('button');
 tonightBtn.textContent = '◎ Tonight';
-tonightBtn.title = 'Live transient alerts (ZTF via ALeRCE)';
+tonightBtn.title = 'Live transient alerts (all-sky)';
 tonightBtn.className = 'pro-only'; // alert ingest is a professional feature
 (document.getElementById('toggle-stars') as HTMLElement).parentElement!.appendChild(tonightBtn);
+
+// Broker toggle: ⚡ ZTF (ALeRCE — dense all-sky, the LSST precursor) ⇄ 🔭 LSST (ANTARES — the
+// real Rubin/LSST stream + ZTF, fuller per-object tags but a smaller recent population). LSST is
+// a toggle today (sparse) and becomes the default as Rubin ramps up; ZTF is the dense default.
+const brokerBtn = document.createElement('button');
+brokerBtn.className = 'pro-only';
+function updateBrokerBtn(): void {
+  const antares = getBroker() === 'antares';
+  brokerBtn.textContent = antares ? '🔭 LSST' : '⚡ ZTF';
+  brokerBtn.title = antares
+    ? 'Broker: ANTARES — real Rubin/LSST + ZTF, fuller per-object tags (smaller recent set). Tap → ZTF (denser).'
+    : 'Broker: ALeRCE — dense all-sky ZTF (LSST precursor). Tap → ANTARES (Rubin/LSST + tags).';
+}
+updateBrokerBtn();
+tonightBtn.parentElement!.appendChild(brokerBtn);
+brokerBtn.addEventListener('click', () => {
+  setBroker(getBroker() === 'antares' ? 'ztf' : 'antares');
+  updateBrokerBtn();
+  transientMap.clear();
+  transientLayer.setTransients([], Date.now());
+  refreshLegend();
+  if (transientsOn) {
+    void loadTonightSnapshot();
+    void fetchTransientsNearView();
+  }
+});
 
 // Live polling: while Tonight is on, re-query the broker near the view every 30 s (the cone
 // cache TTL) so fresh alerts stream in. A "● LIVE" indicator shows seconds since last update.

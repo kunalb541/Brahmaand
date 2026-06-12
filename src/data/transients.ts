@@ -14,8 +14,17 @@
 // ZTF), community-filter TAGS, catalogue cross-matches and thumbnails — fuller than ALeRCE-ZTF,
 // CORS-open, and its recent-all-sky + cone queries are fast (no burst throttle). ALeRCE-ZTF is
 // kept as an alternate. IDs are strings (LSST diaObjectId is int64 > 2^53).
-type Broker = 'antares' | 'ztf';
-const BROKER: Broker = 'antares';
+export type Broker = 'antares' | 'ztf';
+// Default = ZTF via ALeRCE (dense — "ingest all alerts"; ZTF is the LSST precursor the user
+// worked with). ANTARES (real Rubin/LSST + fuller per-object tags) is a runtime toggle.
+let activeBroker: Broker = 'ztf';
+export const getBroker = (): Broker => activeBroker;
+export function setBroker(b: Broker): void {
+  activeBroker = b;
+  coneCache.clear();
+  lcCache.clear();
+  probCache.clear();
+}
 
 const ANTARES = 'https://api.antares.noirlab.edu/v1';
 const ALERCE = 'https://api.alerce.online/ztf/v1/objects/';
@@ -74,11 +83,13 @@ export function classGroup(cls: string | null): TransientGroup {
   return 'other';
 }
 
-export const brokerName = BROKER === 'antares' ? 'ANTARES' : 'ALeRCE';
-export const surveyLabel =
-  BROKER === 'antares' ? 'ANTARES · Rubin/LSST + ZTF' : 'ALeRCE · ZTF (LSST precursor)';
+export const brokerName = (): string => (activeBroker === 'antares' ? 'ANTARES' : 'ALeRCE');
+export const surveyLabel = (): string =>
+  activeBroker === 'antares' ? 'ANTARES · Rubin/LSST + ZTF' : 'ALeRCE · ZTF (LSST precursor)';
 export const objectPageUrl = (oid: string): string =>
-  BROKER === 'antares' ? `https://antares.noirlab.edu/loci/${oid}` : `https://alerce.online/object/${oid}`;
+  activeBroker === 'antares'
+    ? `https://antares.noirlab.edu/loci/${oid}`
+    : `https://alerce.online/object/${oid}`;
 
 /** ANTARES tags → a coarse class label for marker colouring (tags drive the panel detail). */
 function antaresCls(tags: string[]): string | null {
@@ -124,7 +135,7 @@ export async function fetchNear(
 
   await acquire();
   let out: Transient[];
-  if (BROKER === 'antares') {
+  if (activeBroker === 'antares') {
     const rad = Math.min(radiusDeg, 10);
     const url =
       `${ANTARES}/loci?filter%5Bcone%5D=${raDeg},${decDeg},${rad}` +
@@ -187,7 +198,7 @@ export async function fetchLightcurve(oid: string, signal?: AbortSignal): Promis
   if (cached) return cached;
   await acquire();
 
-  if (BROKER === 'antares') {
+  if (activeBroker === 'antares') {
     const r = await fetch(`${ANTARES}/loci/${encodeURIComponent(oid)}`, signal ? { signal } : {});
     if (!r.ok) throw new Error(`ANTARES locus ${r.status}`);
     const j = (await r.json()) as { data?: { attributes?: { lightcurve?: string } } };
@@ -245,7 +256,7 @@ const probCache = new Map<string, ClassProb[]>();
 
 /** The broker's ML classifier outputs for one object (all classifiers, ranked). */
 export async function fetchProbabilities(oid: string, signal?: AbortSignal): Promise<ClassProb[]> {
-  if (BROKER === 'antares') return []; // ANTARES classification is tag-based (shown in the panel)
+  if (activeBroker === 'antares') return []; // ANTARES classification is tag-based (shown in the panel)
   const cached = probCache.get(oid);
   if (cached) return cached;
   await acquire();
@@ -281,10 +292,12 @@ export function topClasses(probs: ClassProb[], n = 3): ClassProb[] {
     .slice(0, n);
 }
 
-/** Static fallback snapshot (bundled, real data) when the live broker is slow/unreachable. */
-export async function loadSnapshot(): Promise<Transient[]> {
+/** Static fallback snapshot (bundled, real data) when the live broker is slow/unreachable.
+ *  ZTF/ALeRCE → the dense `tonight.json`; ANTARES → the smaller real Rubin/LSST+ZTF snapshot. */
+export async function loadSnapshot(broker: Broker = activeBroker): Promise<Transient[]> {
+  const file = broker === 'antares' ? 'transients/tonight-antares.json' : 'transients/tonight.json';
   try {
-    const j = (await (await fetch('transients/tonight.json')).json()) as {
+    const j = (await (await fetch(file)).json()) as {
       transients: { oid: string; ra: number; dec: number; firstmjd: number; lastmjd: number; ndet: number; cls: string | null; tags?: string[] }[];
     };
     return j.transients.map((t) => ({

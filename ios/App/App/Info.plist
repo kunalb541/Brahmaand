@@ -47,5 +47,9 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Your location lets Brahmaand register the view to the real sky overhead (point the phone at the sky to identify what you are looking at). It is used on-device only and never transmitted.</string>
+	<key>NSMotionUsageDescription</key>
+	<string>Motion access lets the view follow your phone as you move it, like a window onto the sky.</string>
 </dict>
 </plist>

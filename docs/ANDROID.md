@@ -36,6 +36,32 @@ cd android && ./gradlew assembleDebug
 
 After any web-code change: `npm run android:sync`, then ▶ again.
 
+## Send it to a friend to test (no Play Store, no account)
+
+The debug APK is a single self-contained file you can hand to anyone with an Android phone:
+
+```bash
+cd android && ./gradlew assembleDebug
+# → android/app/build/outputs/apk/debug/app-debug.apk   (~18 MB)
+```
+
+1. **Send the file.** Email it, drop it in Google Drive/Dropbox and share the link, or use any
+   transfer app. (APKs are too big/blocked for SMS; a Drive link is easiest.)
+2. **On your friend's phone:** open the link, tap the APK to download, then tap it again to install.
+   Android will say "For your security, your phone isn't allowed to install unknown apps from this
+   source" → tap **Settings** → enable **Allow from this source** for whichever app delivered it
+   (Chrome, Gmail, Drive, Files…) → back, then **Install**.
+3. Open **Brahmaand**. It works fully offline-capable for the sky; the live data needs internet.
+
+Notes:
+- This **debug** build is fine for testing and never expires (unlike iOS free-signing's 7 days).
+- It's signed with the auto-generated debug key, so Google Play Protect may show a one-time "unknown
+  app" warning — tapping **Install anyway / More details → Install** is expected for sideloaded apps.
+- For a polished build you'd hand out, make a **release** APK with your own keystore:
+  `./gradlew assembleRelease` after configuring `signingConfigs` in `android/app/build.gradle`
+  (Android Studio → Build → Generate Signed Bundle/APK walks you through creating the keystore).
+- A public listing needs a **Play Console** account ($25 one-time) and an `.aab` (`bundleRelease`).
+
 ## Pro vs Public
 
 Same as iOS: the in-app ◆ PRO ⇄ ◇ Explore toggle, or bake `?mode=pro|public` into the shell URL

@@ -1,25 +1,30 @@
-# VR Astronomy App (working title)
+# Brahmaand — real-sky astronomy app (web · iOS · Android · VR)
 
-A web-based 3D/VR astronomy application: a real-sky planetarium and a real-distance 3D star-field
-flythrough, built on **TypeScript + Vite + Three.js + WebXR**, fed entirely by public astronomical
-data services. **Desktop-first, VR-ready** — it runs as a normal desktop/mobile 3D web app, with an
-additive "Enter VR" mode for WebXR headsets (developed and tested headset-free via the Immersive
-Web Emulator / IWER).
+A real-imagery sky atlas and real-distance 3D star-field flythrough, built on **TypeScript + Vite +
+Three.js + WebXR** and fed entirely by public astronomy services. It runs as a desktop/mobile web
+app, ships as **native iOS and Android apps via Capacitor**, and has an additive **WebXR "Enter VR"**
+mode. Two audiences: a **Pro** mode for professional astronomers (catalogues, readouts, live alert
+ingest with ML classifications) and a simplified **Public** mode for everyone else.
 
-> **Status: PHASE-0 → 8 BUILT & RUNNABLE (PHASE-6 VR emulator-pending; PHASE-8 deploy ready).** A working desktop app exists — a
-> real-imagery celestial sphere (DSS2 colour + Mellinger Milky Way) you can pan and zoom, with a
-> live RA/Dec readout, constellation overlay, bright-star labels, a survey switcher, exposure
-> slider, and an additive WebXR "Enter VR" button. **Zooming streams live HiPS tiles from CDS**
-> (DSS2), sharpening from the whole sky to order-9 detail (verified into M42 and Orion's Belt).
-> **WASD flies you off Earth through 109,400 real stars** (HYG, real parallax distances) with
-> photometric brightening and a planetarium→space transition. **Click any star or search by name**
-> → real SIMBAD data (type, magnitudes, spectral type, parallax-derived distance), a hips2fits image
-> cutout, and links out — all browser-direct, no backend (verified: M31, Sirius, Betelgeuse). A
-> **"Tonight" layer streams live transient alerts** from the ALeRCE broker (ZTF — the LSST precursor
-> survey) as ring markers on the sky; click one for its classification, light curve, and field
-> cutout (verified on real 2026 alerts). The rest of the blueprint (PHASE-4 full Gaia pipeline,
-> PHASE-6 full WebXR, PHASE-8 deploy) is a complete, live-verified implementation plan. See
-> [docs/DECISIONS.md](docs/DECISIONS.md) for what's implemented vs the full spec.
+> **Status: BUILT, RUNNABLE & VERIFIED — web + native iOS (Xcode `BUILD SUCCEEDED`) + native Android
+> (`app-debug.apk`).** Highlights, all live-verified:
+> - **Telescope-resolution zoom, both hemispheres.** A survey ladder (DSS2 base → Pan-STARRS /
+>   DES / DECaPS / unWISE / Rubin First Look / HST / JWST) streams live HiPS tiles from CDS and
+>   composites them, auto-picking the right survey by where you look so detail follows you north↔south.
+> - **109,400 real stars** (HYG parallax distances) you fly through with WASD/QE or a touch joystick;
+>   planetarium↔space transition. **Click or search any object** → real SIMBAD data + hips2fits cutout.
+> - **Live all-sky alert ingest (Pro).** A **broker toggle**: **⚡ ZTF** (ALeRCE — a dense
+>   ~1,100-object classified all-sky snapshot, colour-coded by ML class, topped up live near the
+>   view) ⇄ **🔭 LSST** (ANTARES — the real Rubin/LSST + ZTF stream with fuller per-object tags &
+>   light curves). LSST is a toggle today and becomes the default as Rubin ramps up.
+> - **Phone as a window on the sky.** Gyro + compass + GPS register the view to the *real* sky
+>   (altitude from the gyro, azimuth from the compass, RA/Dec from your location + sidereal time),
+>   auto-switching north/south as you move the phone; falls back to a relative magic-window without GPS.
+> - **Pro / Public dual mode**, deep-link sharing, WebXR VR, $0 backend.
+>
+> See [docs/DECISIONS.md](docs/DECISIONS.md) for what's implemented vs the original spec,
+> [docs/IOS.md](docs/IOS.md) / [docs/ANDROID.md](docs/ANDROID.md) to build & install on a phone, and
+> [docs/USAGE-AND-LEGAL.md](docs/USAGE-AND-LEGAL.md) for who may use it, attribution, and scaling.
 
 ## Quick start
 
@@ -28,7 +33,21 @@ npm install
 npm run dev          # → http://localhost:5173  (look around the real sky)
 npm run build        # typecheck + production bundle into dist/
 npm test             # unit tests (coordinate-frame math)
+
+# Native apps (Capacitor) — see docs/IOS.md and docs/ANDROID.md
+npm run ios:sync && npm run ios:open       # build web → open in Xcode → ▶ to your iPhone
+npm run android:sync && npm run android:open  # build web → open in Android Studio → ▶ / build APK
+
+# Refresh the live alert snapshots (real broker data; re-runnable nightly)
+node tools/build-transients-ztf.mjs        # dense ZTF/ALeRCE  → public/transients/tonight.json
+node tools/build-transients.mjs            # ANTARES Rubin/LSST → public/transients/tonight-antares.json
 ```
+
+**Send the Android app to a friend:** build the debug APK (`cd android && ./gradlew assembleDebug`
+→ `android/app/build/outputs/apk/debug/app-debug.apk`, ~18 MB) and share that file (AirDrop, email,
+Drive, etc.). They enable *Settings → Apps → Special access → Install unknown apps* for the app they
+received it through, then tap the APK to install. No Play Store or developer account needed. See
+[docs/ANDROID.md](docs/ANDROID.md) for signed-release and Play Store options.
 
 Real assets are already vendored under `public/` (DSS2 + Mellinger all-sky JPEGs, constellation
 lines) so it runs offline with no API calls. WebXR needs a secure context — `localhost` counts;
@@ -61,9 +80,10 @@ Three pillars (detailed in [docs/00-vision.md](docs/00-vision.md)):
    geometric/photogeometric distances, preprocessed offline into compact static binary chunks
    (~16 B/star, octree LOD), streamed into a custom Three.js point/impostor renderer. Leave Earth
    and fly through the actual solar neighborhood — parallax is real.
-3. **Live transient layer ("what changed tonight").** Rubin Observatory/LSST alerts — world-public
-   since 2026-02-24 — surfaced via community broker REST APIs (ALeRCE primary, Fink secondary):
-   markers, classifications, light curves, cutout stamps.
+3. **Live transient layer ("what changed tonight", Pro).** All-sky alerts surfaced via community
+   broker REST APIs with a runtime toggle: **ALeRCE/ZTF** (dense, classified — the LSST-precursor
+   stream) and **ANTARES** (the real Rubin/LSST + ZTF stream, fuller per-object tags). Markers are
+   coloured by ML class; click for classification, light curve, real/bogus flag, and cutout stamp.
 
 Supporting features:
 
@@ -177,8 +197,10 @@ UNVERIFIED/derived claims. Design docs carry forward unresolved items as explici
 
 ## Status & key constraints
 
-- **Phase:** planning complete; implementation not started. All external facts re-verified
-  2026-06-11; re-verify CORS headers and npm versions before relying on them at build time.
+- **Phase:** built, runnable & verified on web + native iOS + native Android (see status callout at
+  top). The `plan/` + `docs/research/` files are the original blueprint; each shipped phase is a
+  pragmatic subset of its spec — [docs/DECISIONS.md](docs/DECISIONS.md) records every deviation.
+  Re-verify CORS headers and npm versions before relying on them at build time.
 - **No VR headset on the team.** Everything must run as a plain desktop/mobile web app; VR is
   developed against the Immersive Web Emulator + IWER. On-device Quest performance validation is an
   open logistics item (see [ROADMAP.md](ROADMAP.md), M6).
