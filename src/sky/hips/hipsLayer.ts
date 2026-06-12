@@ -189,6 +189,7 @@ export class HipsLayer {
       side: THREE.DoubleSide, // winding-agnostic; tiles are viewed from the sphere centre
       depthTest: false,
       depthWrite: false,
+      transparent: true, // PNG no-coverage alpha lets the DSS2 base composite through
     });
     const mesh = new THREE.Mesh(geo, mat);
     mesh.renderOrder = -90 + t.order; // higher orders draw on top

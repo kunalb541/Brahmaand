@@ -39,16 +39,20 @@ let currentSurvey = SURVEYS[0]!;
 const hips = new HipsLayer(scene);
 
 async function setSurvey(entry: SurveyEntry): Promise<void> {
-  const texture = await loader.loadAsync(entry.texture);
-  const next = createSkySphere(texture);
-  if (sky) {
-    scene.remove(sky);
-    (sky.material as THREE.MeshBasicMaterial).map?.dispose();
-    (sky.material as THREE.MeshBasicMaterial).dispose();
-    sky.geometry.dispose();
+  // Surveys with an equirect texture (DSS2, Milky Way) also reset the all-sky base sphere;
+  // high-res surveys (texture: null) keep the current base and just stream tiles on top.
+  if (entry.texture) {
+    const texture = await loader.loadAsync(entry.texture);
+    const next = createSkySphere(texture);
+    if (sky) {
+      scene.remove(sky);
+      (sky.material as THREE.MeshBasicMaterial).map?.dispose();
+      (sky.material as THREE.MeshBasicMaterial).dispose();
+      sky.geometry.dispose();
+    }
+    sky = next;
+    scene.add(sky);
   }
-  sky = next;
-  scene.add(sky);
   hips.setConfig(entry.hips);
   currentSurvey = entry;
   attribEl.innerHTML = `${entry.attribution} · <a href="https://aladin.cds.unistra.fr" target="_blank" rel="noopener">CDS</a>`;
@@ -61,6 +65,7 @@ const surveyButtons: HTMLButtonElement[] = SURVEYS.map((s) => {
   const b = document.createElement('button');
   b.textContent = s.name;
   b.dataset.id = s.id;
+  b.title = `${s.hemisphere} · ${s.resolution}/px · zoom in to stream`;
   b.addEventListener('click', () => void setSurvey(s));
   surveyRow.appendChild(b);
   return b;
