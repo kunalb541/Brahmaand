@@ -264,6 +264,42 @@ setSurvey(currentSurvey)
     console.error(e);
   });
 
+// --- About / credits panel ---
+const aboutBtn = document.createElement('button');
+aboutBtn.textContent = 'ⓘ About';
+(document.getElementById('toggle-stars') as HTMLElement).parentElement!.appendChild(aboutBtn);
+const aboutPanel = document.createElement('div');
+aboutPanel.style.cssText =
+  'position:fixed;inset:0;z-index:30;display:none;place-items:center;background:rgba(2,6,14,.8);backdrop-filter:blur(4px)';
+aboutPanel.innerHTML =
+  '<div style="max-width:520px;background:rgba(8,14,28,.96);border:1px solid rgba(120,170,255,.25);' +
+  'border-radius:14px;padding:22px 24px;font:13px ui-monospace,monospace;color:#cfe3ff;line-height:1.6">' +
+  '<h2 style="margin:0 0 8px;color:#9cc4ff">★ BRAHMAAND (ब्रह्मांड)</h2>' +
+  '<p style="margin:0 0 10px;color:#bcd">A real-data planetarium: real survey imagery, real-distance 3D stars, ' +
+  'live transient alerts. Built on public astronomy data, no backend.</p>' +
+  '<div style="font-size:12px;color:#9fb3d6">' +
+  '<b>Sky imagery</b> — DSS2 (STScI) &amp; Mellinger Milky Way, via CDS HiPS / hips2fits<br>' +
+  '<b>3D stars</b> — Gaia DR3 (ESA/Gaia/DPAC, CC BY-SA 3.0 IGO) + HYG (CC BY-SA 4.0); distances from parallax / Bailer-Jones<br>' +
+  '<b>Object data</b> — SIMBAD, Sesame, VizieR (CDS, Strasbourg)<br>' +
+  '<b>Transients</b> — ALeRCE broker · ZTF alert stream (Rubin/LSST precursor)<br>' +
+  '<b>Constellations</b> — d3-celestial (BSD-3, Olaf Frohn)' +
+  '</div>' +
+  '<p style="margin:12px 0 0;font-size:11px;color:#5f7494">Code MIT · data per provider terms. ' +
+  '<a href="https://github.com/kunalb541/Bramhaand.com" target="_blank" rel="noopener" style="color:#8aa6d6">source ↗</a></p>' +
+  '<button id="about-close" style="margin-top:14px;font:inherit;font-size:12px;cursor:pointer;color:#dcebff;' +
+  'background:rgba(40,70,130,.5);border:1px solid rgba(120,170,255,.3);border-radius:6px;padding:5px 12px">Close</button>' +
+  '</div>';
+document.body.appendChild(aboutPanel);
+aboutBtn.addEventListener('click', () => (aboutPanel.style.display = 'grid'));
+aboutPanel.addEventListener('click', (e) => {
+  if (e.target === aboutPanel || (e.target as HTMLElement).id === 'about-close') aboutPanel.style.display = 'none';
+});
+
+// --- Service worker (offline shell + cached assets/tiles) — production only ---
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
+}
+
 // small LOD / tile-count status
 const hipsStatus = document.createElement('div');
 hipsStatus.style.cssText =

@@ -151,3 +151,21 @@ See [plan/AGENT_INSTRUCTIONS.md](../plan/AGENT_INSTRUCTIONS.md) §6.
   desktop-regression and code paths are verified. No 3D controller *models* (avoids the
   `@webxr-input-profiles` asset dependency) — a ray line is shown instead.
 - **Deferred:** in-VR UI panels (uikit), comfort vignette, hand-tracking, magic-window phone mode.
+
+## 2026-06-12 — PHASE-8 (ship) — deploy infra ready; go-live gated on repo visibility
+
+- **Service worker** `public/sw.js` (registered prod-only): same-origin app shell + catalogs +
+  textures cache-first (offline after first load); CDS HiPS tiles/cutouts cache-first, capped at
+  1500, **CORS-only** (never opaque — avoids Chrome quota blowup); SIMBAD/ALeRCE/Sesame/Gaia hosts
+  **never cached** (dynamic). `CACHE_VERSION` bump invalidates.
+- **CI/CD** `.github/workflows/deploy.yml`: on push to `main` → `npm ci` → typecheck → test →
+  build → `upload-pages-artifact` → `deploy-pages`. `.nojekyll` shipped.
+- **`base: './'` (relative)** + relative asset fetches (`catalogs/…`, `textures/…`) make the build
+  work at a GitHub Pages **project subpath** (`/Bramhaand.com/`) with no per-host config.
+- **About/credits panel** (ⓘ button) lists every data provider + licenses + source link.
+- **Go-live blocker (a user decision):** the repo is **private on a free GitHub plan**, and Pages
+  on private repos needs a paid plan. Free options: make the repo **public** (then the workflow
+  publishes to `kunalb541.github.io/Bramhaand.com/`), or deploy to **Cloudflare Pages** (needs a
+  Cloudflare account). All deploy code is ready either way.
+- **Deferred:** R2/object hosting for the 12 MB catalog (fine on Pages for now), nightly
+  `tonight.json` refresh cron, custom domain, COOP/COEP (only needed if SAB/threads are added).

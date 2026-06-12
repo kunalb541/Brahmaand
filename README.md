@@ -6,7 +6,7 @@ data services. **Desktop-first, VR-ready** — it runs as a normal desktop/mobil
 additive "Enter VR" mode for WebXR headsets (developed and tested headset-free via the Immersive
 Web Emulator / IWER).
 
-> **Status: PHASE-0 → PHASE-3 + PHASE-5 + PHASE-7 BUILT & RUNNABLE.** A working desktop app exists — a
+> **Status: PHASE-0 → 8 BUILT & RUNNABLE (PHASE-6 VR emulator-pending; PHASE-8 deploy ready).** A working desktop app exists — a
 > real-imagery celestial sphere (DSS2 colour + Mellinger Milky Way) you can pan and zoom, with a
 > live RA/Dec readout, constellation overlay, bright-star labels, a survey switcher, exposure
 > slider, and an additive WebXR "Enter VR" button. **Zooming streams live HiPS tiles from CDS**
