@@ -19,7 +19,10 @@ interface Tile {
   texture?: THREE.Texture;
   lastWanted: number;
   abort?: AbortController;
+  fadeStart: number; // performance.now() at residency; drives the fade-in
 }
+
+const FADE_MS = 250;
 
 const SUBDIV = 4;
 const MIN_STREAM_ORDER = 6; // below this the 4k equirect base is sharp enough
@@ -117,7 +120,21 @@ export class HipsLayer {
     for (const npix of want) this.ensureTile(order, npix);
 
     this.prune(order);
+    this.updateFades();
     this.tileCount = this.tiles.size;
+  }
+
+  /** Advance per-tile fade-in (smooth appearance instead of pops). Cheap: only mutates
+   *  materials still fading. */
+  private updateFades(): void {
+    const now = performance.now();
+    for (const t of this.tiles.values()) {
+      if (!t.mesh) continue;
+      const mat = t.mesh.material as THREE.MeshBasicMaterial;
+      if (mat.opacity < 1) {
+        mat.opacity = Math.min(1, (now - t.fadeStart) / FADE_MS);
+      }
+    }
   }
 
   private ensureTile(order: number, npix: number): void {
@@ -127,7 +144,7 @@ export class HipsLayer {
       t.lastWanted = this.frame;
       return;
     }
-    t = { order, npix, state: 'loading', lastWanted: this.frame };
+    t = { order, npix, state: 'loading', lastWanted: this.frame, fadeStart: 0 };
     this.tiles.set(k, t);
     this.tryFetch(t);
   }
@@ -190,6 +207,7 @@ export class HipsLayer {
       depthTest: false,
       depthWrite: false,
       transparent: true, // PNG no-coverage alpha lets the DSS2 base composite through
+      opacity: 0, // fades in (§ FADE_MS) to avoid pops
     });
     const mesh = new THREE.Mesh(geo, mat);
     mesh.renderOrder = -90 + t.order; // higher orders draw on top
@@ -198,6 +216,7 @@ export class HipsLayer {
     t.mesh = mesh;
     t.texture = tex;
     t.state = 'ready';
+    t.fadeStart = performance.now();
     this.group.add(mesh);
   }
 
