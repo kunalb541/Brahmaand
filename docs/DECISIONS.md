@@ -246,3 +246,25 @@ See [plan/AGENT_INSTRUCTIONS.md](../plan/AGENT_INSTRUCTIONS.md) §6.
 - **Real-time seam:** the all-sky snapshot is the instant baseline (rebuilt nightly via the
   PHASE-8 cron); the runtime still fires a live cone query near the current view and merges, so
   what you're looking at is freshest. LSST host swaps in via the `SURVEY` adapter when stable.
+
+## 2026-06-12 — Live alerts, Pro-gating, native builds (Xcode + Android Studio present)
+
+- **Live alerts:** cone-cache TTL (30 s) + a 30 s poll while "Tonight" is on → fresh alerts stream
+  in; "● LIVE · N alerts · updated Xs ago" indicator. Verified the broker serves single requests
+  fine (it only throttles concurrent bursts — which is why the dense all-sky cone-grid ingest was
+  abandoned for the runtime-live + small-snapshot model).
+- **Classified snapshot:** the broker's **classifier-ordered** query (`order_by=probability`)
+  returns the classified all-sky population; 3 pages = **709 alerts, all classified** (mostly LPV —
+  the highest-confidence class). Markers now colour by class (blue/periodic here). Variety (SNe/AGN,
+  which sit deeper in probability rank) is a nightly-cron deep-paging follow-up; the loose
+  `class_name` filter can't isolate them.
+- **Alerts are Pro-only** (`.pro-only` on Tonight/legend/live/HiPS-status) — hidden in Explore mode,
+  shown in Pro. Verified both ways.
+- **Native builds succeed on this machine:** Xcode 26.5 → `xcodebuild` **BUILD SUCCEEDED**
+  (iphonesimulator, SPM, no CocoaPods); Android Studio JBR + SDK android-36 → `assembleDebug`
+  **BUILD SUCCESSFUL** → `app-debug.apk` (~18 MB). Both are user-side to *sideload* (signing/device).
+- **ANTARES broker:** reachable but its search API is POST/Elasticsearch-DSL (not a simple GET) —
+  the `ADAPTERS` seam in transients.ts supports adding it; deferred as a small follow-up. ALeRCE
+  remains the working source.
+- **UX fixes:** bottom status line stacked above attribution (overlap gone); the WASD/QE hint is
+  spelled out on desktop and replaced with "pinch to zoom · tap to identify" on touch.

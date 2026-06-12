@@ -4,9 +4,12 @@ Same model as iOS: the `dist/` web build wrapped by **Capacitor** into a native 
 (WebView + the same native plugins). The Gradle project is **committed at
 [`android/`](../android)** (its template `.gitignore` excludes build artifacts).
 
-> **Status 2026-06-12:** project generated, synced, committed. This machine has **no Java/Android
-> SDK**, so the APK build is user-side — install Android Studio and the steps below are all
-> that's left.
+> **Status 2026-06-12:** ✅ **the APK builds** — `./gradlew assembleDebug` returns **BUILD
+> SUCCESSFUL** (2m39s) and produces `android/app/build/outputs/apk/debug/app-debug.apk` (~18 MB),
+> using Android Studio's bundled JDK (JBR) + SDK android-36. `adb install` it on a phone, or
+> `npm run android:open` to run from Studio. Build env (set these or use Studio's):
+> `JAVA_HOME=/Applications/Android Studio.app/Contents/jbr/Contents/Home`,
+> `ANDROID_SDK_ROOT=~/Library/Android/sdk`.
 
 ## One-time setup
 

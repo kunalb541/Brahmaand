@@ -7,7 +7,7 @@
 import { writeFileSync, mkdirSync } from 'node:fs';
 
 const BASE = 'https://api.alerce.online/ztf/v1/objects/';
-const PAGES = 6; // × page_size classified objects (kept small — the broker throttles bursts)
+const PAGES = 3; // × page_size classified objects (tiny — the broker throttles bursts)
 const PAGE_SIZE = 250;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -52,9 +52,8 @@ async function ingest(orderBy, pages) {
   }
 }
 
-console.log('ingesting classified all-sky alerts (probability + recency passes)…');
+console.log('ingesting classified all-sky alerts (probability pass)…');
 await ingest('probability', PAGES); // the classified population, all sky
-await ingest('lastmjd', 6); // recent alerts (new transients)
 
 const transients = [...seen.values()].sort((a, b) => b.lastmjd - a.lastmjd);
 const classified = transients.filter((t) => t.cls).length;
