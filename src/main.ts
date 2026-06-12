@@ -571,11 +571,11 @@ const hudEl = document.getElementById('hud')!;
 const hudTitle = hudEl.querySelector('h1') as HTMLElement;
 hudTitle.style.cursor = 'pointer';
 hudTitle.title = 'tap to collapse/expand controls';
-let hudCollapsed = window.innerWidth < 560; // start collapsed on phones
+let hudCollapsed = window.innerWidth <= 640; // start collapsed on phones (matches the CSS breakpoint)
 function applyHudCollapsed(): void {
-  for (const c of Array.from(hudEl.children)) {
-    if (c !== hudTitle) (c as HTMLElement).style.display = hudCollapsed ? 'none' : '';
-  }
+  // Toggle a class (CSS hides the controls with !important); this composes with applyMode()'s
+  // per-mode inline display instead of fighting it — expanded HUD still respects Pro/Public.
+  hudEl.classList.toggle('hud-collapsed', hudCollapsed);
   hudTitle.textContent = hudCollapsed ? '★ ▾' : '★ STAR ATLAS';
 }
 hudTitle.addEventListener('click', () => {
@@ -600,6 +600,11 @@ function applyMode(): void {
     : 'Public mode — tap for research tools (catalogs, readouts, classifiers)';
   document.getElementById('readout')!.style.display = pro ? '' : 'none';
   for (const el of document.querySelectorAll<HTMLElement>('.pro-only')) el.style.display = pro ? '' : 'none';
+  // legend + live indicator are alert-overlay UI: shown only while Tonight is actually on
+  // (the .pro-only loop above would otherwise reveal an empty legend in Pro mode).
+  const showAlertUI = pro && transientsOn;
+  legend.style.display = showAlertUI ? 'block' : 'none';
+  liveStatus.style.display = showAlertUI ? 'block' : 'none';
 }
 modeBtn.addEventListener('click', () => setMode(getMode() === 'pro' ? 'public' : 'pro'));
 onModeChange(applyMode);

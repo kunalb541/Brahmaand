@@ -19,6 +19,14 @@
         backdrop-filter: blur(6px); max-width: 280px;
       }
       #hud h1 { font-size: 13px; margin: 0 0 6px; letter-spacing: .04em; color: #9cc4ff; }
+      /* Collapsed HUD: hide everything but the title + RA/Dec readout. !important so it wins over
+         the per-mode inline display set by applyMode() (otherwise pro-only rows leak through). */
+      #hud.hud-collapsed > *:not(h1):not(#readout) { display: none !important; }
+      /* Phones: drop the HUD below the top search bar (so they never overlap) and cap its height. */
+      @media (max-width: 640px) {
+        #hud { top: calc(58px + env(safe-area-inset-top)); max-width: calc(100vw - 20px); max-height: 72vh; overflow-y: auto; }
+        #hud h1 { cursor: pointer; }
+      }
       #hud .row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
       #hud button {
         font: inherit; font-size: 11px; cursor: pointer; color: #dcebff;
