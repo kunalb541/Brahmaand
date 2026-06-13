@@ -27,6 +27,15 @@ import {
 } from '../data/transients';
 import { isPro } from '../config/mode';
 import { createFitsView } from './fitsView';
+import {
+  getObserver,
+  setObserver,
+  equatorialToHorizontal,
+  airmass,
+  riseTransitSet,
+  nightWindow,
+  altitudeCurve,
+} from '../data/observability';
 
 interface PanelOpts {
   flyTo: (raDeg: number, decDeg: number, extended: boolean) => void;
@@ -62,6 +71,123 @@ export class ObjectPanel {
     this.panel = document.createElement('div');
     this.panel.style.cssText = 'color:#cfe3ff';
     this.rightPanel.appendChild(this.panel);
+
+    // delegated handler for the observability "set location" action (panel uses innerHTML)
+    this.panel.addEventListener('click', (e) => {
+      const act = (e.target as HTMLElement).closest('[data-obs-act]') as HTMLElement | null;
+      if (!act) return;
+      e.preventDefault();
+      if (act.dataset.obsAct === 'gps') {
+        act.textContent = '📡 locating…';
+        navigator.geolocation?.getCurrentPosition(
+          (p) => {
+            setObserver({ latDeg: p.coords.latitude, lonDeg: p.coords.longitude, label: 'your location (GPS)' });
+            this.rerender?.();
+          },
+          () => {
+            act.textContent = '📡 GPS denied — enter manually';
+          },
+          { enableHighAccuracy: false, timeout: 8000, maximumAge: 600000 },
+        );
+        return;
+      }
+      if (act.dataset.obsAct === 'setloc') {
+        const cur = getObserver();
+        const def = cur ? `${cur.latDeg.toFixed(4)}, ${cur.lonDeg.toFixed(4)}` : '';
+        const v = prompt('Your latitude, longitude in degrees (e.g. 19.0760, 72.8777):', def);
+        if (v != null) {
+          const m = v.split(/[,\s]+/).map(Number).filter((x) => isFinite(x));
+          if (m.length >= 2 && Math.abs(m[0]!) <= 90 && Math.abs(m[1]!) <= 180) {
+            setObserver({ latDeg: m[0]!, lonDeg: m[1]!, label: 'manual' });
+            this.rerender?.();
+          }
+        }
+      }
+    });
+  }
+
+  /** Re-run the last panel render (used after the observer location changes). */
+  private rerender: (() => void) | null = null;
+
+  /** Collapsible observability block: alt/az/airmass now + rise/transit/set + tonight curve. */
+  private obsBlock(raDeg: number, decDeg: number): string {
+    const loc = getObserver();
+    const btn =
+      'cursor:pointer;font:inherit;font-size:11px;color:#dcebff;background:rgba(40,70,130,.5);' +
+      'border:1px solid rgba(120,170,255,.3);border-radius:6px;padding:4px 9px;margin-top:6px';
+    const wrap = (inner: string): string =>
+      `<details style="margin-top:8px;border-top:1px solid rgba(120,170,255,.12);padding-top:6px">` +
+      `<summary style="cursor:pointer;color:#9cc4ff;font-size:11px">Observability${loc ? '' : ' — set location'}</summary>` +
+      `<div style="margin-top:6px">${inner}</div></details>`;
+
+    if (!loc) {
+      return wrap(
+        `<div style="color:#7f93b5;font-size:11px">Set your location to see altitude, airmass and rise / transit / set times for your site.</div>` +
+          `<div style="display:flex;gap:6px;flex-wrap:wrap"><button data-obs-act="gps" style="${btn}">📡 Use GPS</button>` +
+          `<button data-obs-act="setloc" style="${btn}">✎ Enter manually</button></div>`,
+      );
+    }
+    const now = Date.now();
+    const h = equatorialToHorizontal(raDeg, decDeg, loc, now);
+    const X = airmass(h.altDeg);
+    const rts = riseTransitSet(raDeg, decDeg, loc, now);
+    const fmt = (ms: number | null): string =>
+      ms == null ? '—' : new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const up = h.altDeg > 0;
+    const altColor = h.altDeg > 30 ? '#7fe3a8' : h.altDeg > 0 ? '#e8c66a' : '#f08a7a';
+
+    const night = nightWindow(loc, now);
+    const start = night.sunsetMs ?? now - 3 * 3600e3;
+    const end = night.sunriseMs ?? now + 9 * 3600e3;
+    const curve = altitudeCurve(raDeg, decDeg, loc, start, end, 10);
+
+    // SVG altitude-vs-time curve (alt −10..90; horizon line; twilight shade; now marker)
+    const W = 268, H = 86;
+    const xOf = (ms: number): number => ((ms - start) / (end - start)) * W;
+    const yOf = (a: number): number => H - ((Math.max(-10, Math.min(90, a)) + 10) / 100) * H;
+    const pts = curve.map((p) => `${xOf(p.ms).toFixed(1)},${yOf(p.altDeg).toFixed(1)}`).join(' ');
+    const horizonY = yOf(0).toFixed(1);
+    const nowX = xOf(now).toFixed(1);
+    let twilight = '';
+    if (night.duskMs && night.dawnMs) {
+      const x1 = xOf(night.duskMs), x2 = xOf(night.dawnMs);
+      twilight = `<rect x="${x1.toFixed(1)}" y="0" width="${(x2 - x1).toFixed(1)}" height="${H}" fill="rgba(40,70,140,.18)"/>`;
+    }
+    const transitDot =
+      rts.transitMs && rts.transitMs >= start && rts.transitMs <= end
+        ? `<circle cx="${xOf(rts.transitMs).toFixed(1)}" cy="${yOf(rts.maxAltDeg).toFixed(1)}" r="2.5" fill="#9cc4ff"/>`
+        : '';
+    const svg =
+      `<svg viewBox="0 0 ${W} ${H}" style="width:100%;margin-top:7px;background:rgba(0,0,0,.3);border-radius:6px">` +
+      twilight +
+      `<line x1="0" y1="${horizonY}" x2="${W}" y2="${horizonY}" stroke="rgba(150,170,200,.4)" stroke-dasharray="3 3"/>` +
+      `<polyline points="${pts}" fill="none" stroke="#6fbcff" stroke-width="1.6"/>` +
+      `<line x1="${nowX}" y1="0" x2="${nowX}" y2="${H}" stroke="#6fdf9f" stroke-width="1"/>` +
+      transitDot +
+      `</svg>` +
+      `<div style="color:#5f7494;font-size:9px;margin-top:1px">alt vs time · ${night.sunsetMs ? 'tonight (sunset→sunrise)' : 'next 12 h'} · green = now · horizon dashed</div>`;
+
+    const statusLine =
+      rts.status === 'circumpolar'
+        ? `<span style="color:#7fe3a8">circumpolar (never sets)</span>`
+        : rts.status === 'never'
+          ? `<span style="color:#f08a7a">never rises from your site</span>`
+          : `rise ${fmt(rts.riseMs)} · transit ${fmt(rts.transitMs)} · set ${fmt(rts.setMs)}`;
+
+    const rows =
+      `<div style="font-size:11px;line-height:1.5">` +
+      `<div>now: <b style="color:${altColor}">alt ${h.altDeg.toFixed(1)}°</b> · az ${h.azDeg.toFixed(0)}° · ` +
+      `airmass ${up ? X.toFixed(2) : '—'} ${up ? '' : '<span style="color:#f08a7a">(below horizon)</span>'}</div>` +
+      `<div style="color:#cfe3ff">${statusLine}</div>` +
+      `<div style="color:#7f93b5">max alt tonight ${rts.maxAltDeg.toFixed(0)}° · times in your local zone</div>` +
+      `</div>`;
+
+    const locLine =
+      `<div style="color:#5f7494;font-size:9.5px;margin-top:4px">` +
+      `📍 ${loc.label ?? 'location'}: ${loc.latDeg.toFixed(3)}, ${loc.lonDeg.toFixed(3)} ` +
+      `<a href="#" data-obs-act="setloc" style="color:#8aa6d6">change</a></div>`;
+
+    return wrap(rows + svg + locLine);
   }
 
   /** Identify whatever catalogued object is nearest a sky position (from a click or search). */
@@ -196,7 +322,9 @@ export class ObjectPanel {
         `<a href="https://sky.esa.int/?target=${encodeURIComponent(hit.mainId)}&fov=0.5&sci=true" target="_blank" rel="noopener" style="color:#8aa6d6">ESASky ↗</a>` +
         `</div>`,
     );
+    rowsHtml.push(this.obsBlock(hit.raDeg, hit.decDeg));
     rowsHtml.push(this.footer());
+    this.rerender = () => this.renderObject(hit, detail);
     this.show(rowsHtml.join(''));
     if (detail) this.attachFits(hit.raDeg, hit.decDeg, extended ? 0.4 : 0.12);
   }
@@ -332,8 +460,10 @@ export class ObjectPanel {
           `<div style="position:absolute;left:50%;top:50%;width:34px;height:34px;margin:-17px 0 0 -17px;border:1.5px solid #6fe3ff;border-radius:50%;box-shadow:0 0 6px #6fe3ff,inset 0 0 4px #6fe3ff;pointer-events:none"></div>` +
           `</div>` +
           `<div style="margin-top:8px"><a href="${objectPageUrl(t.oid)}" target="_blank" rel="noopener" style="color:#8aa6d6">${brokerName()} object ↗</a></div>` +
+          this.obsBlock(t.raDeg, t.decDeg) +
           this.transientFooter(),
       );
+      this.rerender = () => void this.showTransient(t);
       this.attachFits(t.raDeg, t.decDeg, 0.05);
     } catch (e) {
       if ((e as Error).name !== 'AbortError') {
