@@ -125,22 +125,6 @@ xcrun simctl shutdown all          # stop running simulators
 Nothing in this project runs as a service or daemon by default — closing the terminals that ran
 `npm run dev` / Gradle / Xcode is enough; the commands above are the belt-and-suspenders version.
 
-### Codebase map (graphify, optional)
-
-A queryable knowledge graph of the source is committed at `graphify-out/graph.json` (built with
-[graphify](https://github.com/safishamsi/graphify) — 526 nodes / 983 edges from `src/` + `tools/`,
-AST-only so it's generated **fully offline, no API key**). Regenerate after big refactors:
-
-```bash
-uv tool install graphifyy          # one-time (or: pipx install graphifyy)
-graphify extract . --no-cluster    # re-extract the code graph (.graphifyignore scopes it to src/+tools/)
-graphify query "what wires the time machine into the render loop?"   # ask the graph
-```
-
-`.graphifyignore` limits indexing to code, so no docs/imagery are sent anywhere. To wire it into an
-AI assistant (Claude Code, Cursor, …) run `graphify install` — see the graphify README for per-tool
-setup.
-
 ---
 
 ## What the app is

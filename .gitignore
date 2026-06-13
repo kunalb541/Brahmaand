@@ -11,7 +11,3 @@ data-src/
 .capacitor/
 
 
-# graphify (commit graph.json + manifest; these are local-only)
-graphify-out/cost.json
-graphify-out/cache/
-graphify-out/.graphify_python
