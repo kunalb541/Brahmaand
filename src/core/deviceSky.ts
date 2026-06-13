@@ -7,27 +7,25 @@ import { raDecToWorld } from '../math/frames';
  *
  * Two modes, picked automatically:
  *
- *  • ABSOLUTE (GPS + compass) — when device location and a compass heading are available, the
- *    app computes where each look direction points on the *real* celestial sphere:
- *    altitude (from the gravity-referenced gyro) + azimuth (from the compass) + your GPS
- *    latitude/longitude + the current Local Sidereal Time → (RA, Dec). Hold the phone up and it
- *    shows the actual stars overhead, and it auto-switches north↔south by where you aim.
+ *  • ABSOLUTE (GPS) — maps the device look VECTOR straight into the celestial frame: the
+ *    gravity-referenced horizon vector (East/North/Up) is recombined from three world basis
+ *    directions (east-horizon / north-horizon / zenith) built from your latitude + Local Sidereal
+ *    Time. Because it's a linear vector transform (no azimuth/altitude decomposition) it is
+ *    SINGULARITY-FREE — it never spins, even pointing at the zenith — and it tracks the sky's
+ *    rotation over time. North is anchored by a ONE-TIME compass seed (captured when the phone is
+ *    roughly level) plus the user's persistent drag-alignment; the compass is never fed
+ *    continuously (its jitter, plus the old az/alt gimbal, was what made the view spin).
  *
- *  • RELATIVE (gyro only) — fallback when location/compass are denied or unsupported. The view
- *    tracks how you move the phone but is not registered to true sky coordinates.
+ *  • RELATIVE (no GPS) — the same aligned look vector without sky registration: tracks how you move
+ *    the phone, altitude is real (gravity), and a drag rotates the whole sky to match reality.
  *
- * SMOOTHNESS (Star-Walk-like): raw `deviceorientation` events are noisy and arrive at sensor
- * rate, so driving the camera per-event looks shaky. Instead, each event only updates a TARGET
- * look direction; `update(dt)` (called from the render loop) eases the displayed direction toward
- * the target with a dt-corrected exponential filter, alpha = 1 − exp(−dt/τ). Easing the 3-D look
- * VECTOR (normalized lerp) rather than scalar yaw/pitch avoids the yaw ±π wraparound glitch.
- * τ ≈ 0.12 s for the gyro-only path; the compass-fused absolute path uses a longer τ (compass
- * heading jitters more), trading a touch of lag for stability — same trick planetarium apps use.
+ * SMOOTHNESS (Star-Walk-like): each sensor event only writes a TARGET orientation; `update(dt)`
+ * (render loop) slerps the camera toward it with a 1-Euro adaptive cutoff (heavy smoothing when
+ * still, responsive when moving) + a deadband that holds rock-steady at rest. See PRESETS / update().
  *
- * Calibration note: ALTITUDE is exact (gravity is unambiguous). The AZIMUTH sign/offset is the one
- * value that can vary by device/OS; `AZ_SIGN`/`AZ_OFFSET_DEG` below are the single knobs to nudge
- * after a real-sky check (point at a known bright star and confirm). Defaults follow the iOS
- * `webkitCompassHeading` convention (degrees clockwise from true north).
+ * Calibration: ALTITUDE is exact (gravity). AZIMUTH north is unreliable per device, so the user
+ * drag-aligns once (persisted). `AZ_SIGN` flips the compass-seed handedness if the initial guess
+ * is mirrored; the drag-align corrects any residual offset.
  */
 
 // --- azimuth calibration knobs (only these may need a tweak after an on-device sky check) ---
@@ -57,7 +55,9 @@ const quat = new THREE.Quaternion();
 const look = new THREE.Vector3();
 const look2 = new THREE.Vector3();
 const top = new THREE.Vector3();
-const worldDir = new THREE.Vector3();
+const eVec = new THREE.Vector3(); // East-horizon-point direction in the celestial world frame
+const nVec = new THREE.Vector3(); // North-horizon-point direction
+const uVec = new THREE.Vector3(); // Zenith direction
 
 /** Build a roll-free camera orientation quaternion that looks along (yaw,pitch). */
 function quatFromYawPitch(yaw: number, pitch: number, out: THREE.Quaternion): void {
@@ -87,22 +87,6 @@ function lstRad(unixMs: number, lonRad: number): number {
   return gmstRad(unixMs) + lonRad;
 }
 
-/**
- * Horizon (altitude, azimuth-from-north-through-east) → equatorial (RA, Dec), both radians,
- * for an observer at latitude `lat` and local sidereal time `lst`.
- */
-function altAzToRaDec(alt: number, az: number, lat: number, lst: number): { ra: number; dec: number } {
-  const sinDec = Math.sin(lat) * Math.sin(alt) + Math.cos(lat) * Math.cos(alt) * Math.cos(az);
-  const dec = Math.asin(THREE.MathUtils.clamp(sinDec, -1, 1));
-  const cosDec = Math.cos(dec) || 1e-9;
-  const sinH = (-Math.sin(az) * Math.cos(alt)) / cosDec;
-  const cosH = (Math.sin(alt) - Math.sin(lat) * sinDec) / (Math.cos(lat) * cosDec || 1e-9);
-  const h = Math.atan2(sinH, cosH); // hour angle
-  let ra = lst - h;
-  ra = ((ra % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
-  return { ra, dec };
-}
-
 export class DeviceSky {
   enabled = false;
   /** True once a real-sky (GPS + compass) fix is in use; false = relative magic-window. */
@@ -118,8 +102,11 @@ export class DeviceSky {
   // so we never use it directly: we estimate the constant offset between the gyro frame's
   // azimuth and true north, sampled ONLY in poses where the compass is meaningful, low-passed,
   // and then derive the look azimuth from the (continuous) gyro quaternion + this offset.
-  private compassOffset = 0;
-  private hasOffset = false;
+  // North seed from the compass — captured ONCE (when ~level), never fed continuously. A live
+  // compass feed is what made the registered sky spin (heading jitter + alt/az gimbal); a single
+  // seed + the user's drag-align is reliable. radians: az = gyroAz + compassSeed + azOffsetUser.
+  private compassSeed = 0;
+  private seeded = false;
 
   // User manual sky-alignment (radians), persisted. Device compasses are unreliable and vary by
   // model, so — like SkySafari / Stellarium Mobile — the user can DRAG the sky into alignment once
@@ -241,7 +228,7 @@ export class DeviceSky {
     this.enabled = true;
     this.hasTarget = false;
     this.hasSmooth = false; // snap to the first fix (no whip-pan from a stale direction)
-    this.hasOffset = false;
+    this.seeded = false;
     return true;
   }
 
@@ -269,7 +256,7 @@ export class DeviceSky {
     this.absolute = false;
     this.hasTarget = false;
     this.hasSmooth = false;
-    this.hasOffset = false;
+    this.seeded = false;
   }
 
   /**
@@ -326,10 +313,7 @@ export class DeviceSky {
     const q = deviceQuaternion(e.alpha * DEG2RAD, e.beta * DEG2RAD, e.gamma * DEG2RAD, orient);
     // look direction in the gravity-referenced frame (X = east-ish, Y = zenith, −Z = north-ish)
     look.set(0, 0, -1).applyQuaternion(q).normalize();
-    // azimuths IN THE GYRO FRAME (north through east) — continuous over the full sphere
-    const azLookGyro = Math.atan2(look.x, -look.z);
-    top.set(0, 1, 0).applyQuaternion(q).normalize();
-    const azTopGyro = Math.atan2(top.x, -top.z);
+    top.set(0, 1, 0).applyQuaternion(q).normalize(); // device top (for the level-pose seed gate)
 
     // Compass heading (deg clockwise from true north): iOS exposes webkitCompassHeading;
     // Android's absolute stream has north-referenced alpha (0 = north, counter-clockwise).
@@ -342,35 +326,59 @@ export class DeviceSky {
     }
     this.headingDeg = headingDeg;
 
-    // Update the gyro→north offset only while the device TOP is far enough from vertical for
-    // its horizontal compass projection to mean something (|top.y| < 0.7 ≈ tilted < 45°).
-    // While you then sweep the raised phone across the sky, the offset just holds steady.
-    if (headingDeg != null && Math.abs(top.y) < 0.7) {
-      const headingRad = (AZ_SIGN * headingDeg + AZ_OFFSET_DEG) * DEG2RAD;
-      let d = headingRad - azTopGyro - this.compassOffset;
-      d = Math.atan2(Math.sin(d), Math.cos(d)); // wrap to ±π
-      this.compassOffset += (this.hasOffset ? PRESETS[this.mode].compassLp : 1) * d; // snap first, then low-pass
-      this.hasOffset = true;
+    // ENU components of the look direction in the gravity frame (East=+X, North=−Z, Up=+Y).
+    const E0 = look.x;
+    const N0 = -look.z;
+    const U0 = look.y;
+
+    // ONE-TIME north seed: when the phone is roughly level the look azimuth ≈ the compass heading,
+    // so capture the constant gyro→true-north offset once. We never feed the compass after that
+    // (continuous heading jitter + the azimuth gimbal near the zenith were what made it spin).
+    if (!this.seeded && headingDeg != null && Math.abs(U0) < 0.5) {
+      const trueAz = (AZ_SIGN * headingDeg + AZ_OFFSET_DEG) * DEG2RAD;
+      const gyroAz = Math.atan2(E0, N0);
+      this.compassSeed = trueAz - gyroAz;
+      this.seeded = true;
     }
 
-    if (this.hasOffset && this.latRad != null && this.lonRad != null) {
-      // ABSOLUTE: altitude AND azimuth both from the continuous gyro quaternion (so a full
-      // 360° sweep and tilting through the zenith track correctly); the compass only anchors
-      // the frame to true north via the low-passed offset above. → real RA/Dec.
-      const alt = THREE.MathUtils.clamp(
-        Math.asin(THREE.MathUtils.clamp(look.y, -1, 1)) + this.altOffsetUser,
-        -Math.PI / 2,
-        Math.PI / 2,
-      );
-      const az = azLookGyro + this.compassOffset + this.azOffsetUser;
-      const { ra, dec } = altAzToRaDec(alt, az, this.latRad, lstRad(Date.now(), this.lonRad));
-      raDecToWorld(ra, dec, worldDir);
-      this.targetDir.copy(worldDir);
+    // North-align (rotate ENU about Up by the seed + the user's manual offset) — a pure rotation,
+    // singularity-free. Then a small altitude nudge (tilt N/U about East).
+    const yaw = this.compassSeed + this.azOffsetUser;
+    const cy = Math.cos(yaw);
+    const sy = Math.sin(yaw);
+    const E = E0 * cy + N0 * sy;
+    let N = N0 * cy - E0 * sy;
+    let U = U0;
+    if (this.altOffsetUser) {
+      const ca = Math.cos(this.altOffsetUser);
+      const sa = Math.sin(this.altOffsetUser);
+      const n2 = N * ca - U * sa;
+      U = N * sa + U * ca;
+      N = n2;
+    }
+
+    if (this.latRad != null && this.lonRad != null) {
+      // ABSOLUTE: map the aligned horizon vector (E,N,U) → equatorial world by latitude + LST as a
+      // LINEAR combination of three basis directions (East/North/Zenith). No az/alt decomposition,
+      // so it never spins — even pointing at the zenith — and it tracks the sky's rotation via LST.
+      const theta = lstRad(Date.now(), this.lonRad); // RA on the meridian (= RA at zenith)
+      const phi = this.latRad;
+      raDecToWorld(theta + Math.PI / 2, 0, eVec); // east horizon point
+      raDecToWorld(theta, phi, uVec); // zenith
+      raDecToWorld(theta + Math.PI, Math.PI / 2 - phi, nVec); // north horizon point
+      this.targetDir
+        .set(
+          E * eVec.x + N * nVec.x + U * uVec.x,
+          E * eVec.y + N * nVec.y + U * uVec.y,
+          E * eVec.z + N * nVec.z + U * uVec.z,
+        )
+        .normalize();
       this.absolute = true;
     } else {
-      // RELATIVE magic-window (no GPS/compass): target straight from the device look vector.
+      // RELATIVE magic-window (no GPS): the aligned look vector, Y-up. Singularity-free; altitude
+      // is real (gravity); the manual drag rotates the whole sky horizontally to match reality.
+      this.targetDir.set(E, U, -N).normalize();
       this.absolute = false;
-      this.targetDir.copy(look);
     }
     this.hasTarget = true;
   }
