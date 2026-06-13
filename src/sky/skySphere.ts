@@ -60,7 +60,10 @@ export function createSkySphere(texture: THREE.Texture): THREE.Mesh {
   const geo = buildSkyGeometry(SKY_RADIUS);
   const mat = new THREE.MeshBasicMaterial({
     map: texture,
-    side: THREE.BackSide, // viewed from the centre
+    // DoubleSide: buildSkyGeometry's winding (u mirrored for inside-view RA) makes the
+    // inside-visible faces FRONT faces, so BackSide culled the whole sphere (the base sky
+    // never rendered). DoubleSide is winding-agnostic — same choice as the HiPS tiles.
+    side: THREE.DoubleSide,
     depthWrite: false,
     transparent: true, // opacity is driven by the planetarium↔space mode fade
   });

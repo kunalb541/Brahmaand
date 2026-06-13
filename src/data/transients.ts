@@ -39,12 +39,23 @@ export interface Transient {
   cls: string | null;
   /** ANTARES community-filter tags (classification/quality), if any. */
   tags?: string[];
+  /** Alert-packet cutout stamps (ANTARES): how pros vet real vs bogus. */
+  stamps?: { science?: string; template?: string; difference?: string };
 }
 
 export interface LcPoint {
   mjd: number;
   mag: number;
   fid: number; // 1=g, 2=r, 3=i
+  /** 1σ magnitude error, when the broker provides it. */
+  magErr?: number;
+}
+
+/** Non-detection: the survey looked and saw nothing brighter than `lim` (5σ upper limit). */
+export interface LcLimit {
+  mjd: number;
+  lim: number;
+  fid: number;
 }
 
 // ---- classification groups (for all-sky marker colouring + filtering) ----
@@ -142,12 +153,28 @@ export async function fetchNear(
       `&page%5Bsize%5D=100&sort=-properties.newest_alert_observation_time`;
     const r = await fetch(url, signal ? { signal } : {});
     if (!r.ok) throw new Error(`ANTARES ${r.status}`);
-    const j = (await r.json()) as { data?: { id: string; attributes: Record<string, unknown> }[] };
+    const j = (await r.json()) as {
+      data?: {
+        id: string;
+        attributes: Record<string, unknown>;
+        meta?: { newest_thumbnails?: { data?: { attributes?: { src?: string; thumbnail_type?: string } } }[] };
+      }[];
+    };
     out = (j.data ?? [])
       .map((o) => {
         const a = o.attributes;
         const p = (a['properties'] ?? {}) as Record<string, number>;
         const tags = (a['tags'] as string[]) ?? [];
+        // science/template/difference alert stamps (verified path: meta.newest_thumbnails[].data.attributes)
+        let stamps: Transient['stamps'];
+        for (const th of o.meta?.newest_thumbnails ?? []) {
+          const at = th.data?.attributes;
+          if (!at?.src || !at.thumbnail_type) continue;
+          stamps ??= {};
+          if (at.thumbnail_type === 'science') stamps.science = at.src;
+          else if (at.thumbnail_type === 'template') stamps.template = at.src;
+          else if (at.thumbnail_type === 'difference') stamps.difference = at.src;
+        }
         return {
           oid: o.id,
           raDeg: Number(a['ra']),
@@ -157,6 +184,7 @@ export async function fetchNear(
           ndet: Number(p['num_alerts'] ?? 1),
           cls: antaresCls(tags),
           tags,
+          stamps,
         };
       })
       .filter((t) => isFinite(t.raDeg) && isFinite(t.decDeg));
@@ -184,6 +212,8 @@ export async function fetchNear(
 
 export interface Lightcurve {
   points: LcPoint[];
+  /** Non-detections: 5σ upper limits at the object's position (forced-photometry-style view). */
+  limits: LcLimit[];
   /** Deep-learning real-bogus score (max over detections), 0..1; null if absent. */
   drb: number | null;
   /** Random-forest real-bogus (fallback when drb is absent). */
@@ -202,33 +232,62 @@ export async function fetchLightcurve(oid: string, signal?: AbortSignal): Promis
     const r = await fetch(`${ANTARES}/loci/${encodeURIComponent(oid)}`, signal ? { signal } : {});
     if (!r.ok) throw new Error(`ANTARES locus ${r.status}`);
     const j = (await r.json()) as { data?: { attributes?: { lightcurve?: string } } };
+    // verified header: time,alert_id,ant_mjd,ant_survey,ant_ra,ant_dec,ant_passband,ant_mag,
+    //                  ant_magerr,ant_maglim,… — detection rows have ant_mag; upper-limit rows
+    //                  have ant_mag empty and ant_maglim set (the 5σ non-detection floor).
     const csv = j.data?.attributes?.lightcurve ?? '';
     const lines = csv.split('\n');
     const hdr = lines[0]?.split(',') ?? [];
     const iMjd = hdr.indexOf('ant_mjd');
     const iMag = hdr.indexOf('ant_mag');
+    const iErr = hdr.indexOf('ant_magerr');
+    const iLim = hdr.indexOf('ant_maglim');
     const iPb = hdr.indexOf('ant_passband');
     const points: LcPoint[] = [];
+    const limits: LcLimit[] = [];
     for (let i = 1; i < lines.length; i++) {
       const f = lines[i]!.split(',');
       const mjd = parseFloat(f[iMjd]!);
-      const mag = parseFloat(f[iMag]!); // empty = upper limit (non-detection) → skipped
-      if (!isFinite(mjd) || !isFinite(mag)) continue;
-      points.push({ mjd, mag, fid: PB_FID[f[iPb]!] ?? 2 });
+      if (!isFinite(mjd)) continue;
+      const fid = PB_FID[f[iPb]!] ?? 2;
+      const mag = parseFloat(f[iMag]!);
+      if (isFinite(mag)) {
+        const err = parseFloat(f[iErr]!);
+        points.push({ mjd, mag, fid, magErr: isFinite(err) ? err : undefined });
+      } else {
+        const lim = parseFloat(f[iLim]!);
+        if (isFinite(lim)) limits.push({ mjd, lim, fid });
+      }
     }
     points.sort((a, b) => a.mjd - b.mjd);
-    const lc: Lightcurve = { points, drb: null, rb: null };
+    limits.sort((a, b) => a.mjd - b.mjd);
+    const lc: Lightcurve = { points, limits, drb: null, rb: null };
     lcCache.set(oid, lc);
     return lc;
   }
 
   const r = await fetch(`${ALERCE}${encodeURIComponent(oid)}/lightcurve`, signal ? { signal } : {});
   if (!r.ok) throw new Error(`lightcurve ${r.status}`);
-  const j = (await r.json()) as { detections?: Record<string, unknown>[] };
+  const j = (await r.json()) as {
+    detections?: Record<string, unknown>[];
+    non_detections?: Record<string, unknown>[];
+  };
   const dets = j.detections ?? [];
   const points: LcPoint[] = dets
-    .map((d) => ({ mjd: Number(d['mjd']), mag: Number(d['magpsf']), fid: Number(d['fid']) }))
+    .map((d) => {
+      const err = Number(d['sigmapsf']);
+      return {
+        mjd: Number(d['mjd']),
+        mag: Number(d['magpsf']),
+        fid: Number(d['fid']),
+        magErr: isFinite(err) ? err : undefined,
+      };
+    })
     .filter((p) => isFinite(p.mjd) && isFinite(p.mag))
+    .sort((a, b) => a.mjd - b.mjd);
+  const limits: LcLimit[] = (j.non_detections ?? [])
+    .map((d) => ({ mjd: Number(d['mjd']), lim: Number(d['diffmaglim']), fid: Number(d['fid']) }))
+    .filter((p) => isFinite(p.mjd) && isFinite(p.lim))
     .sort((a, b) => a.mjd - b.mjd);
   const max = (k: string): number | null => {
     let m: number | null = null;
@@ -238,7 +297,7 @@ export async function fetchLightcurve(oid: string, signal?: AbortSignal): Promis
     }
     return m;
   };
-  const lc: Lightcurve = { points, drb: max('drb'), rb: max('rb') };
+  const lc: Lightcurve = { points, limits, drb: max('drb'), rb: max('rb') };
   lcCache.set(oid, lc);
   return lc;
 }

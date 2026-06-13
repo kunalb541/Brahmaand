@@ -50,6 +50,15 @@ export class HipsLayer {
   /** current LOD order, exposed for the HUD */
   order = 0;
   tileCount = 0;
+  /** Tiles fully loaded / confirmed absent (404 = outside the survey's sky coverage). */
+  readyCount = 0;
+  missingCount = 0;
+
+  private zeroCounts(): void {
+    this.tileCount = 0;
+    this.readyCount = 0;
+    this.missingCount = 0;
+  }
 
   constructor(scene: THREE.Scene) {
     this.group.renderOrder = -90;
@@ -76,7 +85,7 @@ export class HipsLayer {
   /** Drop all tiles (called when leaving planetarium mode). */
   clear(): void {
     this.clearAll();
-    this.tileCount = 0;
+    this.zeroCounts();
   }
 
   private key(order: number, npix: number): string {
@@ -86,7 +95,7 @@ export class HipsLayer {
   update(camera: THREE.PerspectiveCamera): void {
     if (!this.cfg) {
       this.order = 0;
-      this.tileCount = 0;
+      this.zeroCounts();
       return;
     }
     this.frame++;
@@ -97,7 +106,7 @@ export class HipsLayer {
 
     if (order < MIN_STREAM_ORDER) {
       if (this.tiles.size) this.clearAll();
-      this.tileCount = 0;
+      this.zeroCounts();
       return;
     }
 
@@ -122,6 +131,14 @@ export class HipsLayer {
     this.prune(order);
     this.updateFades();
     this.tileCount = this.tiles.size;
+    let ready = 0;
+    let missing = 0;
+    for (const t of this.tiles.values()) {
+      if (t.state === 'ready') ready++;
+      else if (t.state === 'missing') missing++;
+    }
+    this.readyCount = ready;
+    this.missingCount = missing;
   }
 
   /** Advance per-tile fade-in (smooth appearance instead of pops). Cheap: only mutates

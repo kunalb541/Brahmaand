@@ -15,6 +15,8 @@ import {
   loadSnapshot,
   getBroker,
   setBroker,
+  classGroup,
+  ageDays,
   GROUP_LIST,
   GROUP_LABEL,
   GROUP_COLOR,
@@ -30,6 +32,7 @@ import { SkyReadout } from './ui/readout';
 import { ObjectPanel } from './ui/objectPanel';
 import { SURVEYS, type SurveyEntry } from './config/surveys';
 import { getMode, setMode, onModeChange, isPro } from './config/mode';
+import { initHelpPanel } from './ui/helpPanel';
 import { DEG2RAD, RAD2DEG } from './math/angles';
 import { worldToRaDec } from './math/frames';
 
@@ -52,7 +55,7 @@ let sky: THREE.Mesh | null = null;
 let currentSurvey = SURVEYS[0]!;
 const hips = new HipsLayer(scene);
 
-async function setSurvey(entry: SurveyEntry): Promise<void> {
+async function setSurvey(entry: SurveyEntry, opts?: { jump?: boolean }): Promise<void> {
   // Surveys with an equirect texture (DSS2, Milky Way) also reset the all-sky base sphere;
   // high-res surveys (texture: null) keep the current base and just stream tiles on top.
   if (entry.texture) {
@@ -69,8 +72,34 @@ async function setSurvey(entry: SurveyEntry): Promise<void> {
   }
   hips.setConfig(entry.hips);
   currentSurvey = entry;
+  applySkyExposure();
   attribEl.innerHTML = `${entry.attribution} · <a href="https://aladin.cds.unistra.fr" target="_blank" rel="noopener">CDS</a>`;
   for (const b of surveyButtons) b.classList.toggle('active', b.dataset.id === entry.id);
+
+  // A user CLICK should visibly do something at any zoom: field surveys fly to a famous
+  // covered target; wide HiPS surveys zoom in place past the tile-streaming threshold
+  // (tiles only stream below ~3.5° FOV — at wide field only the all-sky base is visible).
+  if (opts?.jump) {
+    if (entry.target) {
+      fly.reset();
+      controls.flyTo(entry.target.raDeg * DEG2RAD, entry.target.decDeg * DEG2RAD, entry.target.fovDeg);
+    } else if (entry.hips && !entry.texture && controls.fovDeg > 3.2) {
+      camera.getWorldDirection(jumpDir);
+      worldToRaDec(jumpDir, jumpRd);
+      controls.flyTo(jumpRd.raRad, jumpRd.decRad, 2.5);
+    }
+  }
+}
+const jumpDir = new THREE.Vector3();
+const jumpRd = { raRad: 0, decRad: 0 };
+
+// Base-sphere brightness: the exposure slider drives the sky sphere too (DSS2 gets a default
+// boost — the vendored all-sky JPEG is dark, which is why the Milky Way band was invisible).
+let skyStops = 0;
+function applySkyExposure(): void {
+  if (!sky) return;
+  const boost = currentSurvey.id === 'dss2' ? 1.7 : 1;
+  (sky.material as THREE.MeshBasicMaterial).color.setScalar(boost * Math.pow(2, skyStops));
 }
 
 // --- UI: survey switcher (PRO only — the public doesn't pick observatories; see auto-survey) ---
@@ -81,7 +110,7 @@ const surveyButtons: HTMLButtonElement[] = SURVEYS.map((s) => {
   b.textContent = s.name;
   b.dataset.id = s.id;
   b.title = `${s.hemisphere} · ${s.resolution}/px · zoom in to stream`;
-  b.addEventListener('click', () => void setSurvey(s));
+  b.addEventListener('click', () => void setSurvey(s, { jump: true }));
   surveyRow.appendChild(b);
   return b;
 });
@@ -133,18 +162,24 @@ function maxPointSize(): number {
   return gl.getParameter(gl.ALIASED_POINT_SIZE_RANGE)[1] as number;
 }
 
-// flythrough UI: exposure slider + "Return to Earth"
-const flyRow = document.createElement('div');
-flyRow.className = 'row';
-flyRow.innerHTML =
-  '<label class="pro-only" style="font-size:11px;display:flex;align-items:center;gap:6px">exposure ' +
-  '<input id="exposure" type="range" min="-3" max="3" step="0.1" value="0" style="width:90px"></label>' +
-  '<button id="return-earth">Return to Earth</button>' +
+// flythrough UI: exposure slider (Imagery section) + "Return to Earth" / Share (Tools section)
+const expRow = document.createElement('div');
+expRow.className = 'row pro-only';
+expRow.innerHTML =
+  '<label style="display:flex;align-items:center;gap:6px;width:100%">exposure ' +
+  '<input id="exposure" type="range" min="-3" max="3" step="0.1" value="0" style="flex:1;min-width:80px"></label>';
+document.getElementById('sec-imagery')!.appendChild(expRow);
+const toolsRow = document.createElement('div');
+toolsRow.className = 'row';
+toolsRow.innerHTML =
+  '<button id="return-earth">⌂ Return to Earth</button>' +
   '<button id="share-view" title="copy a link to this exact view">⌁ Share</button>';
-document.getElementById('hud')!.insertBefore(flyRow, document.querySelector('#hud .hint'));
+document.getElementById('sec-tools')!.appendChild(toolsRow);
 (document.getElementById('exposure') as HTMLInputElement).addEventListener('input', (e) => {
   const stops = parseFloat((e.target as HTMLInputElement).value);
   for (const sf of starFields) sf.setExposure(stops);
+  skyStops = stops;
+  applySkyExposure(); // base sky imagery brightens/darkens with the same stops
 });
 document.getElementById('return-earth')!.addEventListener('click', () => {
   fly.reset();
@@ -163,22 +198,19 @@ shareBtn.addEventListener('click', () => {
     () => {},
   );
 });
-const isTouch = matchMedia('(pointer: coarse)').matches;
-document.querySelector('#hud .hint')!.textContent = isTouch
-  ? 'Drag or move your phone to look · pinch to zoom · joystick to fly · tap to identify'
-  : 'Drag to look · scroll to zoom · WASD/QE to fly (W/A/S/D move, Q/E down/up) · click a star to identify';
+const isTouch = matchMedia('(pointer: coarse)').matches; // (controls guide lives in ? Help)
 
 // --- Touch controls (phones/tablets): a fly joystick + a gyro "move phone to look" toggle ---
 const deviceSky = new DeviceSky(controls);
 if (isTouch) {
-  // gyro toggle
+  // gyro toggle — lives INSIDE the sky area (#skyspace), so it can never cover the bars
   const gyroBtn = document.createElement('button');
   gyroBtn.textContent = '📱 Move-to-look';
   gyroBtn.style.cssText =
-    'position:fixed;left:50%;transform:translateX(-50%);bottom:calc(14px + env(safe-area-inset-bottom));z-index:12;' +
+    'position:absolute;left:50%;transform:translateX(-50%);bottom:14px;' +
     'font:12px ui-monospace,monospace;color:#dcebff;background:rgba(40,70,130,.6);border:1px solid rgba(120,170,255,.4);' +
     'border-radius:18px;padding:7px 14px';
-  document.body.appendChild(gyroBtn);
+  document.getElementById('skyspace')!.appendChild(gyroBtn);
   let gyroPoll: ReturnType<typeof setInterval> | null = null;
   gyroBtn.addEventListener('click', async () => {
     if (deviceSky.enabled) {
@@ -200,16 +232,16 @@ if (isTouch) {
     }
   });
 
-  // fly joystick (bottom-left): drag the nub → fly.touchFwd / touchStrafe
+  // fly joystick (bottom-left of the sky area): drag the nub → fly.touchFwd / touchStrafe
   const pad = document.createElement('div');
   pad.style.cssText =
-    'position:fixed;left:calc(18px + env(safe-area-inset-left));bottom:calc(70px + env(safe-area-inset-bottom));' +
-    'width:96px;height:96px;border-radius:50%;background:rgba(20,30,55,.5);border:1px solid rgba(120,170,255,.3);z-index:12;touch-action:none';
+    'position:absolute;left:14px;bottom:58px;' +
+    'width:96px;height:96px;border-radius:50%;background:rgba(20,30,55,.5);border:1px solid rgba(120,170,255,.3);touch-action:none';
   const nub = document.createElement('div');
   nub.style.cssText =
     'position:absolute;left:50%;top:50%;width:38px;height:38px;margin:-19px 0 0 -19px;border-radius:50%;background:rgba(120,170,255,.7)';
   pad.appendChild(nub);
-  document.body.appendChild(pad);
+  document.getElementById('skyspace')!.appendChild(pad);
   let padId = -1;
   const R = 38;
   const setNub = (dx: number, dy: number) => {
@@ -279,17 +311,19 @@ async function fetchTransientsNearView(): Promise<void> {
   }
 }
 
+const alertsSec = document.getElementById('sec-alerts')!;
+const alertsBtnRow = document.createElement('div');
+alertsBtnRow.className = 'row';
+alertsSec.appendChild(alertsBtnRow);
 const tonightBtn = document.createElement('button');
-tonightBtn.textContent = '◎ Tonight';
-tonightBtn.title = 'Live transient alerts (all-sky)';
-tonightBtn.className = 'pro-only'; // alert ingest is a professional feature
-(document.getElementById('toggle-stars') as HTMLElement).parentElement!.appendChild(tonightBtn);
+tonightBtn.textContent = '◎ Live alerts';
+tonightBtn.title = 'Stream live transient alerts (all-sky) from the broker';
+alertsBtnRow.appendChild(tonightBtn);
 
 // Broker toggle: ⚡ ZTF (ALeRCE — dense all-sky, the LSST precursor) ⇄ 🔭 LSST (ANTARES — the
 // real Rubin/LSST stream + ZTF, fuller per-object tags but a smaller recent population). LSST is
 // a toggle today (sparse) and becomes the default as Rubin ramps up; ZTF is the dense default.
 const brokerBtn = document.createElement('button');
-brokerBtn.className = 'pro-only';
 function updateBrokerBtn(): void {
   const antares = getBroker() === 'antares';
   brokerBtn.textContent = antares ? '🔭 LSST' : '⚡ ZTF';
@@ -298,7 +332,7 @@ function updateBrokerBtn(): void {
     : 'Broker: ALeRCE — dense all-sky ZTF (LSST precursor). Tap → ANTARES (Rubin/LSST + tags).';
 }
 updateBrokerBtn();
-tonightBtn.parentElement!.appendChild(brokerBtn);
+alertsBtnRow.appendChild(brokerBtn);
 brokerBtn.addEventListener('click', () => {
   setBroker(getBroker() === 'antares' ? 'ztf' : 'antares');
   updateBrokerBtn();
@@ -311,20 +345,16 @@ brokerBtn.addEventListener('click', () => {
   }
 });
 
-// Live polling: while Tonight is on, re-query the broker near the view every 30 s (the cone
-// cache TTL) so fresh alerts stream in. A "● LIVE" indicator shows seconds since last update.
-// Sits ABOVE the attribution line (bottom:26px) so the two don't overlap.
-const liveStatus = document.createElement('div');
-liveStatus.className = 'pro-only';
-liveStatus.style.cssText =
-  'position:fixed;right:10px;bottom:calc(30px + env(safe-area-inset-bottom));z-index:11;display:none;font:10px ui-monospace,monospace;color:#6fdf9f';
-document.body.appendChild(liveStatus);
+// Live polling: while alerts are on, re-query the broker near the view every 30 s (the cone
+// cache TTL) so fresh alerts stream in. The "● LIVE" indicator lives in the bottom status bar.
+const liveStatus = document.getElementById('live-slot')!;
+liveStatus.classList.add('pro-only');
 let livePoll: ReturnType<typeof setInterval> | null = null;
 
 tonightBtn.addEventListener('click', () => {
   transientsOn = tonightBtn.classList.toggle('active');
-  legend.style.display = transientsOn ? 'block' : 'none';
-  liveStatus.style.display = transientsOn ? 'block' : 'none';
+  liveStatus.style.display = transientsOn ? '' : 'none';
+  renderFeed();
   if (transientsOn) {
     fly.reset(); // transients are sky-direction objects — view from Earth
     if (transientMap.size === 0) void loadTonightSnapshot();
@@ -338,14 +368,12 @@ tonightBtn.addEventListener('click', () => {
   }
 });
 
-// --- classification legend + per-class filter (markers coloured by the broker's ML class) ---
+// --- classification legend + per-class filter (markers coloured by the broker's ML class).
+//     Lives inside the dock's Alerts section — never floats over anything. ---
 const hiddenGroups = new Set<TransientGroup>();
 const legend = document.createElement('div');
-legend.className = 'pro-only';
-legend.style.cssText =
-  'position:fixed;right:10px;bottom:calc(52px + env(safe-area-inset-bottom));z-index:11;display:none;font:11px ui-monospace,monospace;' +
-  'background:rgba(6,12,24,.82);border:1px solid rgba(120,170,255,.2);border-radius:10px;padding:8px 10px';
-document.body.appendChild(legend);
+legend.style.cssText = 'margin-top:8px;font-size:11px';
+alertsSec.appendChild(legend);
 const legendRows = new Map<TransientGroup, { row: HTMLDivElement; count: HTMLSpanElement }>();
 {
   const title = document.createElement('div');
@@ -369,6 +397,7 @@ const legendRows = new Map<TransientGroup, { row: HTMLDivElement; count: HTMLSpa
       else hiddenGroups.add(g);
       row.style.opacity = hiddenGroups.has(g) ? '0.35' : '1';
       transientLayer.setHiddenGroups(hiddenGroups);
+      renderFeed();
     });
     legend.appendChild(row);
     legendRows.set(g, { row, count });
@@ -376,7 +405,51 @@ const legendRows = new Map<TransientGroup, { row: HTMLDivElement; count: HTMLSpa
 }
 function refreshLegend(): void {
   for (const g of GROUP_LIST) legendRows.get(g)!.count.textContent = String(transientLayer.groupCounts[g]);
+  renderFeed();
 }
+
+// --- alert FEED (inbox): newest loci first, filtered by the legend; click → fly + details ---
+const feed = document.createElement('div');
+feed.style.cssText = 'margin-top:8px;max-height:38vh;overflow-y:auto;overscroll-behavior:contain';
+alertsSec.appendChild(feed);
+const FEED_MAX = 60;
+function renderFeed(): void {
+  feed.textContent = '';
+  if (!transientsOn) {
+    feed.innerHTML = `<div style="color:#5f7494;font-size:10px">enable ◎ Live alerts to stream the feed</div>`;
+    return;
+  }
+  const items = [...transientMap.values()]
+    .filter((t) => !hiddenGroups.has(classGroup(t.cls)))
+    .sort((a, b) => b.lastMjd - a.lastMjd)
+    .slice(0, FEED_MAX);
+  if (!items.length) {
+    feed.innerHTML = `<div style="color:#5f7494;font-size:10px">no alerts match the current filters</div>`;
+    return;
+  }
+  const now = Date.now();
+  for (const t of items) {
+    const [r, g, b] = GROUP_COLOR[classGroup(t.cls)];
+    const age = ageDays(t.lastMjd, now);
+    const row = document.createElement('div');
+    row.style.cssText =
+      'display:flex;align-items:center;gap:6px;padding:3px 2px;cursor:pointer;font-size:10px;' +
+      'border-bottom:1px solid rgba(120,170,255,.07)';
+    row.innerHTML =
+      `<span style="width:7px;height:7px;border-radius:50%;flex:none;background:rgb(${(r * 255) | 0},${(g * 255) | 0},${(b * 255) | 0})"></span>` +
+      `<span style="color:#dcebff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${t.oid}</span>` +
+      `<span style="color:#7f93b5;flex:none">${t.cls ?? '—'}</span>` +
+      `<span style="color:#5f7494;flex:none">${age < 1 ? `${Math.max(0, age * 24).toFixed(0)}h` : `${age.toFixed(0)}d`}</span>`;
+    row.title = `${t.oid} · ${t.cls ?? 'unclassified'} · ${t.ndet} detections — click to view`;
+    row.addEventListener('click', () => {
+      fly.reset();
+      controls.flyTo(t.raDeg * DEG2RAD, t.decDeg * DEG2RAD, 4);
+      void objectPanel.showTransient(t);
+    });
+    feed.appendChild(row);
+  }
+}
+renderFeed();
 
 // --- VizieR multiwavelength catalogue overlays ---
 const catalogOverlay = new CatalogOverlay(scene);
@@ -399,7 +472,7 @@ async function fetchCatalogNearView(preset: CatalogPreset): Promise<void> {
 const catRow = document.createElement('div');
 catRow.className = 'row pro-only';
 catRow.innerHTML = '<span style="font-size:11px;color:#7f93b5;align-self:center">Catalogs:</span>';
-document.getElementById('hud')!.insertBefore(catRow, document.querySelector('#hud .hint'));
+document.getElementById('sec-overlays')!.appendChild(catRow);
 for (const preset of CATALOGS) {
   const b = document.createElement('button');
   b.textContent = preset.name;
@@ -458,9 +531,14 @@ function pickSkyDirection(dir: THREE.Vector3): void {
 // --- WebXR controller input (PHASE-6): rays, trigger→identify, thumbstick fly + snap-turn ---
 const xrInput = new XRInput(renderer, rig, camera, pickSkyDirection);
 
-// --- WebXR "Enter VR" (additive; shows "VR NOT SUPPORTED" on desktop without a headset) ---
-const vrbtn = document.getElementById('vrbtn')!;
-vrbtn.appendChild(VRButton.createButton(renderer));
+// --- WebXR "Enter VR" (additive; shows "VR NOT SUPPORTED" on desktop without a headset).
+//     Docked in Tools — VRButton ships fixed-positioning styles that we strip. ---
+const vrBtnEl = VRButton.createButton(renderer);
+vrBtnEl.style.position = 'static';
+vrBtnEl.style.left = '';
+vrBtnEl.style.bottom = '';
+vrBtnEl.style.margin = '6px 0 0';
+document.getElementById('sec-tools')!.appendChild(vrBtnEl);
 
 // --- Resize ---
 addEventListener('resize', () => {
@@ -535,10 +613,14 @@ setSurvey(currentSurvey)
     console.error(e);
   });
 
+// --- Help (controls + install steps) ---
+initHelpPanel();
+
 // --- About / credits panel ---
 const aboutBtn = document.createElement('button');
-aboutBtn.textContent = 'ⓘ About';
-(document.getElementById('toggle-stars') as HTMLElement).parentElement!.appendChild(aboutBtn);
+aboutBtn.textContent = 'ⓘ';
+aboutBtn.title = 'About · data credits';
+document.getElementById('topbar-actions')!.appendChild(aboutBtn);
 const aboutPanel = document.createElement('div');
 aboutPanel.style.cssText =
   'position:fixed;inset:0;z-index:30;display:none;place-items:center;background:rgba(2,6,14,.8);backdrop-filter:blur(4px)';
@@ -552,11 +634,11 @@ aboutPanel.innerHTML =
   '<b>Sky imagery</b> — DSS2 (STScI) &amp; Mellinger Milky Way, via CDS HiPS / hips2fits<br>' +
   '<b>3D stars</b> — Gaia DR3 (ESA/Gaia/DPAC, CC BY-SA 3.0 IGO) + HYG (CC BY-SA 4.0); distances from parallax / Bailer-Jones<br>' +
   '<b>Object data</b> — SIMBAD, Sesame, VizieR (CDS, Strasbourg)<br>' +
-  '<b>Transients</b> — ALeRCE broker · ZTF alert stream (Rubin/LSST precursor)<br>' +
+  '<b>Alerts</b> — ALeRCE broker (ZTF) &amp; ANTARES broker, NOIRLab (Rubin/LSST + ZTF)<br>' +
   '<b>Constellations</b> — d3-celestial (BSD-3, Olaf Frohn)' +
   '</div>' +
   '<p style="margin:12px 0 0;font-size:11px;color:#5f7494">Code MIT · data per provider terms. ' +
-  '<a href="https://github.com/kunalb541/Bramhaand.com" target="_blank" rel="noopener" style="color:#8aa6d6">source ↗</a></p>' +
+  '<a href="https://github.com/kunalb541/Brahmaand" target="_blank" rel="noopener" style="color:#8aa6d6">source ↗</a></p>' +
   '<button id="about-close" style="margin-top:14px;font:inherit;font-size:12px;cursor:pointer;color:#dcebff;' +
   'background:rgba(40,70,130,.5);border:1px solid rgba(120,170,255,.3);border-radius:6px;padding:5px 12px">Close</button>' +
   '</div>';
@@ -566,23 +648,14 @@ aboutPanel.addEventListener('click', (e) => {
   if (e.target === aboutPanel || (e.target as HTMLElement).id === 'about-close') aboutPanel.style.display = 'none';
 });
 
-// --- Collapsible HUD (tap title) — keeps controls out of the way on small/touch screens ---
-const hudEl = document.getElementById('hud')!;
-const hudTitle = hudEl.querySelector('h1') as HTMLElement;
-hudTitle.style.cursor = 'pointer';
-hudTitle.title = 'tap to collapse/expand controls';
-let hudCollapsed = window.innerWidth <= 640; // start collapsed on phones (matches the CSS breakpoint)
-function applyHudCollapsed(): void {
-  // Toggle a class (CSS hides the controls with !important); this composes with applyMode()'s
-  // per-mode inline display instead of fighting it — expanded HUD still respects Pro/Public.
-  hudEl.classList.toggle('hud-collapsed', hudCollapsed);
-  hudTitle.textContent = hudCollapsed ? '★ ▾' : '★ STAR ATLAS';
+// --- Dock behaviour: accordion sections + the phone drawer (☰) ---
+for (const h of document.querySelectorAll<HTMLElement>('#dock h2[data-sec]')) {
+  h.addEventListener('click', () => h.parentElement!.classList.toggle('closed'));
 }
-hudTitle.addEventListener('click', () => {
-  hudCollapsed = !hudCollapsed;
-  applyHudCollapsed();
-});
-applyHudCollapsed();
+const midrow = document.getElementById('midrow')!;
+document.getElementById('dock-burger')!.addEventListener('click', () => midrow.classList.toggle('dock-open'));
+// touching the sky dismisses the phone drawer
+canvas.addEventListener('pointerdown', () => midrow.classList.remove('dock-open'));
 
 // --- Service worker (offline shell + cached assets/tiles) — production only ---
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
@@ -591,7 +664,7 @@ if (import.meta.env.PROD && 'serviceWorker' in navigator) {
 
 // --- PRO ⇄ EXPLORE mode toggle ---
 const modeBtn = document.createElement('button');
-(document.getElementById('toggle-stars') as HTMLElement).parentElement!.appendChild(modeBtn);
+document.getElementById('topbar-actions')!.appendChild(modeBtn);
 function applyMode(): void {
   const pro = isPro();
   modeBtn.textContent = pro ? '◆ PRO' : '◇ Explore';
@@ -600,27 +673,21 @@ function applyMode(): void {
     : 'Public mode — tap for research tools (catalogs, readouts, classifiers)';
   document.getElementById('readout')!.style.display = pro ? '' : 'none';
   for (const el of document.querySelectorAll<HTMLElement>('.pro-only')) el.style.display = pro ? '' : 'none';
-  // legend + live indicator are alert-overlay UI: shown only while Tonight is actually on
-  // (the .pro-only loop above would otherwise reveal an empty legend in Pro mode).
-  const showAlertUI = pro && transientsOn;
-  legend.style.display = showAlertUI ? 'block' : 'none';
-  liveStatus.style.display = showAlertUI ? 'block' : 'none';
+  // the ● LIVE line only shows while alert streaming is actually on
+  liveStatus.style.display = pro && transientsOn ? '' : 'none';
 }
 modeBtn.addEventListener('click', () => setMode(getMode() === 'pro' ? 'public' : 'pro'));
 onModeChange(applyMode);
 applyMode(); // initial state (all pro-only elements exist by this point)
 
-// small LOD / tile-count status
-const hipsStatus = document.createElement('div');
-hipsStatus.className = 'pro-only';
-hipsStatus.style.cssText =
-  'position:fixed;bottom:calc(26px + env(safe-area-inset-bottom));left:8px;z-index:10;font:11px ui-monospace,monospace;' +
-  'color:#7f93b5;background:rgba(6,12,24,.55);padding:3px 7px;border-radius:6px;pointer-events:none';
-document.body.appendChild(hipsStatus);
-applyMode(); // re-apply: hipsStatus (pro-only) is created after the initial applyMode()
+// small LOD / tile-count status (bottom status bar slot)
+const hipsStatus = document.getElementById('hips-slot')!;
+hipsStatus.classList.add('pro-only');
+applyMode(); // re-apply: hipsStatus (pro-only) is tagged after the initial applyMode()
 
 startLoop(renderer, (dt) => {
   try {
+    deviceSky.update(dt); // ease toward the latest gyro/compass fix (smooth, Star-Walk-like)
     if (!renderer.xr.isPresenting) controls.update(dt);
     fly.update(dt);
     xrInput.update(dt);
@@ -644,20 +711,25 @@ startLoop(renderer, (dt) => {
 
     hips.setCenter(rig.position);
     hips.setVisible(nearEarth);
-    if (nearEarth) hips.update(camera);
-
-    // Public mode: auto-pick the deepest survey for the view (Pan-STARRS north / DES south),
-    // so detail "just appears" on zoom — the public never sees the observatory picker.
-    if (nearEarth && !isPro() && controls.fovDeg < 25) {
-      camera.getWorldDirection(viewDir);
-      worldToRaDec(viewDir, autoRd);
-      const wantId = (autoRd.decRad * RAD2DEG) > -28 ? 'panstarrs' : 'des';
-      if (currentSurvey.id !== wantId) {
-        const sv = SURVEYS.find((s) => s.id === wantId);
-        if (sv) void setSurvey(sv);
+    if (nearEarth) {
+      hips.update(camera);
+      // Public mode: auto-pick the deepest survey for the view (Pan-STARRS north / DES south),
+      // so detail "just appears" on zoom — the public never sees the observatory picker.
+      if (!isPro() && controls.fovDeg < 25) {
+        camera.getWorldDirection(viewDir);
+        worldToRaDec(viewDir, autoRd);
+        const wantId = (autoRd.decRad * RAD2DEG) > -28 ? 'panstarrs' : 'des';
+        if (currentSurvey.id !== wantId) {
+          const sv = SURVEYS.find((s) => s.id === wantId);
+          if (sv) void setSurvey(sv);
+        }
       }
+    } else if (hips.tileCount) {
+      // left Earth view → drop the streamed tiles (was previously mis-attached to the
+      // auto-survey `if`, which wiped the HiPS layer EVERY frame in Pro mode — the reason
+      // survey switching and zoomed tile streaming appeared completely dead)
+      hips.clear();
     }
-    else if (hips.tileCount) hips.clear();
 
     // transients: Earth-view only; refetch when the view pans far enough
     transientLayer.setCenter(rig.position);
@@ -693,11 +765,17 @@ startLoop(renderer, (dt) => {
     renderer.render(scene, camera);
     hud.tick(dt);
 
+    // honest tile status: names the active survey and says when you're outside its coverage
     hipsStatus.textContent =
       dist < 1
         ? hips.order
-          ? `Earth view · HiPS order ${hips.order} · ${hips.tileCount} tiles`
-          : 'Earth view · base sky'
+          ? `${currentSurvey.name} · order ${hips.order} · ${hips.readyCount}/${hips.tileCount} tiles` +
+            (hips.missingCount && hips.missingCount >= hips.tileCount - 1
+              ? ' · outside survey coverage'
+              : hips.missingCount
+                ? ` · ${hips.missingCount} off-coverage`
+                : '')
+          : `${currentSurvey.name} · base sky (zoom for telescope tiles)`
         : `flying · ${dist.toFixed(1)} pc from the Sun`;
   } catch (e) {
     // surface instead of silently killing the animation loop

@@ -5,62 +5,194 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <title>Star Atlas — real-imagery sky</title>
+    <title>Brahmaand — real-sky atlas</title>
     <style>
-      :root { color-scheme: dark; }
+      :root {
+        color-scheme: dark;
+        --panel: rgba(7, 11, 22, 0.82);
+        --panel-solid: rgba(8, 13, 26, 0.96);
+        --line: rgba(120, 170, 255, 0.14);
+        --line-strong: rgba(120, 170, 255, 0.3);
+        --text: #cfe3ff;
+        --text-dim: #7f93b5;
+        --text-faint: #5f7494;
+        --accent: #9cc4ff;
+        --btn: rgba(40, 70, 130, 0.45);
+        --btn-active: rgba(90, 140, 230, 0.7);
+        --sat: env(safe-area-inset-top, 0px);
+        --sab: env(safe-area-inset-bottom, 0px);
+        --sal: env(safe-area-inset-left, 0px);
+        --sar: env(safe-area-inset-right, 0px);
+      }
       html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
-      body { font-family: ui-monospace, "SF Mono", Menlo, monospace; color: #cfe3ff; }
+      body { font-family: ui-monospace, "SF Mono", Menlo, monospace; color: var(--text); }
       canvas { display: block; }
-      #hud {
-        position: fixed;
-        top: calc(10px + env(safe-area-inset-top)); left: calc(10px + env(safe-area-inset-left)); z-index: 10;
-        background: rgba(6, 12, 24, 0.62); border: 1px solid rgba(120,170,255,.18);
-        border-radius: 10px; padding: 10px 12px; font-size: 12px; line-height: 1.5;
-        backdrop-filter: blur(6px); max-width: 280px;
+
+      /* ---- App frame: fixed regions (top bar / mid row / bottom bar). UI panels are grid/flex
+             children of the frame, so they CANNOT overlap each other by construction — the only
+             thing panels cover is the sky canvas behind the frame. ---- */
+      #frame {
+        position: fixed; inset: 0; z-index: 10;
+        display: flex; flex-direction: column;
+        pointer-events: none; /* sky stays interactive; bars/panels re-enable below */
       }
-      #hud h1 { font-size: 13px; margin: 0 0 6px; letter-spacing: .04em; color: #9cc4ff; }
-      /* Collapsed HUD: hide everything but the title + RA/Dec readout. !important so it wins over
-         the per-mode inline display set by applyMode() (otherwise pro-only rows leak through). */
-      #hud.hud-collapsed > *:not(h1):not(#readout) { display: none !important; }
-      /* Phones: drop the HUD below the top search bar (so they never overlap) and cap its height. */
-      @media (max-width: 640px) {
-        #hud { top: calc(58px + env(safe-area-inset-top)); max-width: calc(100vw - 20px); max-height: 72vh; overflow-y: auto; }
-        #hud h1 { cursor: pointer; }
+
+      /* ---- Top bar ---- */
+      #topbar {
+        pointer-events: auto;
+        display: flex; align-items: center; gap: 8px;
+        padding: calc(6px + var(--sat)) calc(10px + var(--sar)) 6px calc(10px + var(--sal));
+        background: var(--panel); backdrop-filter: blur(10px);
+        border-bottom: 1px solid var(--line);
+        min-height: 30px;
       }
-      #hud .row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
-      #hud button {
-        font: inherit; font-size: 11px; cursor: pointer; color: #dcebff;
-        background: rgba(40,70,130,.45); border: 1px solid rgba(120,170,255,.3);
-        border-radius: 6px; padding: 4px 8px;
+      #brand { font-weight: 700; font-size: 13px; letter-spacing: .05em; color: var(--accent); white-space: nowrap; }
+      #brand small { color: var(--text-faint); font-weight: 400; }
+      #search-slot { flex: 1; display: flex; min-width: 60px; max-width: 420px; }
+      #search-slot input {
+        width: 100%; font: 12px ui-monospace, monospace; color: #dcebff;
+        background: rgba(0, 0, 0, 0.35); border: 1px solid var(--line-strong);
+        border-radius: 7px; padding: 5px 9px; outline: none;
       }
-      #hud button.active { background: rgba(90,140,230,.7); border-color: #9cc4ff; }
-      #hud .hint { color: #7f93b5; font-size: 10.5px; margin-top: 8px; }
-      #attrib {
-        position: fixed; bottom: calc(8px + env(safe-area-inset-bottom)); right: 10px; z-index: 10; text-align: right;
-        font-size: 10px; color: #6f86ab; max-width: 60vw;
+      #search-slot input:focus { border-color: var(--accent); }
+      #topbar-actions { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+      #topbar button, #dock button, #rightpanel button {
+        font: 11px ui-monospace, monospace; cursor: pointer; color: #dcebff;
+        background: var(--btn); border: 1px solid var(--line-strong);
+        border-radius: 6px; padding: 4px 8px; white-space: nowrap;
       }
+      #topbar button.active, #dock button.active { background: var(--btn-active); border-color: var(--accent); }
+      #dock-burger { display: none; }
+
+      /* ---- Mid row: dock | sky | right panel ---- */
+      #midrow { flex: 1; display: flex; min-height: 0; position: relative; }
+
+      #dock {
+        pointer-events: auto;
+        width: 232px; flex: none; overflow-y: auto; overscroll-behavior: contain;
+        background: var(--panel); backdrop-filter: blur(10px);
+        border-right: 1px solid var(--line);
+        padding: 4px 10px calc(10px + var(--sab)) calc(10px + var(--sal));
+      }
+      #dock section { border-bottom: 1px solid var(--line); padding-bottom: 8px; margin-bottom: 4px; }
+      #dock section:last-child { border-bottom: none; }
+      #dock h2 {
+        font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--text-dim);
+        margin: 8px 0 2px; cursor: pointer; user-select: none; display: flex; align-items: center;
+      }
+      #dock h2::after { content: '▾'; margin-left: auto; color: var(--text-faint); transition: transform .15s; }
+      #dock section.closed h2::after { transform: rotate(-90deg); }
+      #dock section.closed .sec-body { display: none; }
+      #dock .row { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 6px; }
+      #dock label { font-size: 11px; color: var(--text); }
+
+      #skyspace { flex: 1; position: relative; pointer-events: none; min-width: 0; }
+      #skyspace > * { pointer-events: auto; }
+
+      #rightpanel {
+        pointer-events: auto;
+        width: 304px; flex: none; display: none; overflow-y: auto; overscroll-behavior: contain;
+        background: var(--panel); backdrop-filter: blur(10px);
+        border-left: 1px solid var(--line);
+        padding: 10px 12px calc(10px + var(--sab)) 12px;
+        font: 12px ui-monospace, monospace;
+      }
+      #rightpanel.open { display: block; }
+
+      /* ---- Bottom status bar: ONE flex line; sections shrink with ellipsis, never stack ---- */
+      #bottombar {
+        pointer-events: auto;
+        display: flex; align-items: center; gap: 12px;
+        padding: 3px calc(10px + var(--sar)) calc(3px + var(--sab)) calc(10px + var(--sal));
+        background: var(--panel); backdrop-filter: blur(10px);
+        border-top: 1px solid var(--line);
+        font-size: 10px; color: var(--text-dim);
+        white-space: nowrap; overflow: hidden; min-height: 18px;
+      }
+      #bottombar > * { overflow: hidden; text-overflow: ellipsis; flex: none; }
+      #readout { color: var(--text); }
+      #attrib { margin-left: auto; color: #6f86ab; flex: 0 1 auto; }
       #attrib a { color: #8aa6d6; }
-      #vrbtn { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); z-index: 10; }
+      #live-slot { color: #6fdf9f; }
+
+      /* ---- Phones / narrow: dock becomes a drawer INSIDE the mid row (cannot cover the bars);
+             right panel becomes a bottom sheet inside the mid row. ---- */
+      @media (max-width: 760px) {
+        #dock-burger { display: inline-block; }
+        #dock {
+          position: absolute; left: 0; top: 0; bottom: 0; z-index: 5;
+          width: min(290px, 86vw);
+          transform: translateX(-105%); transition: transform .18s ease-out;
+          background: var(--panel-solid);
+        }
+        #midrow.dock-open #dock { transform: translateX(0); }
+        #rightpanel {
+          position: absolute; left: 0; right: 0; bottom: 0; top: auto; z-index: 6;
+          width: auto; max-height: 62%;
+          border-left: none; border-top: 1px solid var(--line-strong);
+          border-radius: 14px 14px 0 0; background: var(--panel-solid);
+        }
+        #brand small { display: none; }
+        #stats-slot, #hips-slot { display: none; } /* keep the status line short on phones */
+      }
+      @media (max-width: 420px) {
+        #brand { font-size: 12px; }
+        #search-slot input { font-size: 11px; padding: 5px 7px; }
+      }
+
+      /* ---- Loading splash ---- */
       #loading {
         position: fixed; inset: 0; display: grid; place-items: center; z-index: 20;
-        background: #000; color: #9cc4ff; font-size: 13px; transition: opacity .5s; pointer-events: none;
+        background: #000; color: var(--accent); font-size: 13px; transition: opacity .5s; pointer-events: none;
       }
     </style>
   </head>
   <body>
     <div id="loading">Loading real survey imagery…</div>
-    <div id="hud">
-      <h1>★ STAR ATLAS</h1>
-      <div id="readout">RA --h --m&nbsp;&nbsp;Dec ±--° --′</div>
-      <div class="row" id="surveys"></div>
-      <div class="row">
-        <button id="toggle-const" class="active">Constellations</button>
-        <button id="toggle-stars" class="active">Star labels</button>
+    <div id="frame">
+      <header id="topbar">
+        <button id="dock-burger" title="controls">☰</button>
+        <div id="brand">✦ BRAHMAAND <small>· real-sky atlas</small></div>
+        <div id="search-slot"></div>
+        <div id="topbar-actions"></div>
+      </header>
+      <div id="midrow">
+        <aside id="dock">
+          <section id="sec-imagery-wrap">
+            <h2 data-sec>Imagery</h2>
+            <div class="sec-body" id="sec-imagery">
+              <div class="row" id="surveys"></div>
+            </div>
+          </section>
+          <section id="sec-overlays-wrap">
+            <h2 data-sec>Overlays</h2>
+            <div class="sec-body" id="sec-overlays">
+              <div class="row">
+                <button id="toggle-const" class="active">Constellations</button>
+                <button id="toggle-stars" class="active">Star labels</button>
+              </div>
+            </div>
+          </section>
+          <section id="sec-alerts-wrap" class="pro-only">
+            <h2 data-sec>Live alerts</h2>
+            <div class="sec-body" id="sec-alerts"></div>
+          </section>
+          <section id="sec-tools-wrap">
+            <h2 data-sec>Tools</h2>
+            <div class="sec-body" id="sec-tools"></div>
+          </section>
+        </aside>
+        <div id="skyspace"></div>
+        <aside id="rightpanel"></aside>
       </div>
-      <div class="hint">Drag to look · scroll to zoom · real photographic sky</div>
+      <footer id="bottombar">
+        <span id="readout">RA --h --m&nbsp;&nbsp;Dec ±--° --′</span>
+        <span id="stats-slot"></span>
+        <span id="hips-slot"></span>
+        <span id="live-slot"></span>
+        <span id="attrib"></span>
+      </footer>
     </div>
-    <div id="attrib"></div>
-    <div id="vrbtn"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

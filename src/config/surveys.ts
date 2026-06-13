@@ -17,6 +17,8 @@ export interface SurveyEntry {
   resolution: string;
   /** Live HiPS tile streaming config (equatorial/ICRS surveys). null = equirect only. */
   hips: { base: string; format: string; maxOrder: number } | null;
+  /** Where clicking the survey should fly (field surveys: a famous covered target). */
+  target?: { raDeg: number; decDeg: number; fovDeg: number };
 }
 
 const ALASKY = 'https://alasky.cds.unistra.fr';
@@ -75,6 +77,7 @@ export const SURVEYS: SurveyEntry[] = [
     hemisphere: 'south',
     resolution: "0.1''",
     hips: { base: `${ALASKY}/Rubin/CDS_P_Rubin_FirstLook`, format: 'png', maxOrder: 12 },
+    target: { raDeg: 187.7, decDeg: 12.34, fovDeg: 1.6 }, // First Look: Virgo cluster field
   },
   {
     id: 'hst',
@@ -84,6 +87,7 @@ export const SURVEYS: SurveyEntry[] = [
     hemisphere: 'fields',
     resolution: '25 mas',
     hips: { base: `${ALASKY}/HST-outreach/CDS_P_HST_EPO`, format: 'png', maxOrder: 14 },
+    target: { raDeg: 274.7, decDeg: -13.81, fovDeg: 0.9 }, // M16 Eagle Nebula (Pillars)
   },
   {
     id: 'jwst-carina',
@@ -93,6 +97,7 @@ export const SURVEYS: SurveyEntry[] = [
     hemisphere: 'fields',
     resolution: '25 mas',
     hips: { base: `${ALASKY}/JWST/CDS_P_JWST_Carina-Nebula_NIRCam`, format: 'png', maxOrder: 14 },
+    target: { raDeg: 161.18, decDeg: -59.65, fovDeg: 0.45 }, // the NIRCam Cosmic Cliffs mosaic
   },
   {
     id: 'mellinger',

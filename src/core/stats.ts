@@ -1,18 +1,16 @@
 import * as THREE from 'three';
 
-/** Minimal FPS + draw-call HUD (bottom-left). Cheap; safe to tick every frame. */
+/** Minimal FPS + draw-call readout (bottom status bar). Cheap; safe to tick every frame. */
 export class StatsHud {
-  private el: HTMLDivElement;
+  private el: HTMLElement;
   private frames = 0;
   private acc = 0;
 
   constructor(private renderer: THREE.WebGLRenderer) {
-    this.el = document.createElement('div');
-    this.el.className = 'pro-only';
-    this.el.style.cssText =
-      'position:fixed;bottom:8px;left:8px;z-index:10;font:11px ui-monospace,monospace;' +
-      'color:#7f93b5;background:rgba(6,12,24,.55);padding:3px 7px;border-radius:6px;pointer-events:none';
-    document.body.appendChild(this.el);
+    const slot = document.getElementById('stats-slot');
+    this.el = slot ?? document.createElement('span');
+    this.el.classList.add('pro-only');
+    if (!slot) document.body.appendChild(this.el);
   }
 
   tick(dt: number): void {

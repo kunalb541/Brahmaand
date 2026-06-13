@@ -11,12 +11,18 @@ import { raDecToWorld } from '../math/frames';
  *    app computes where each look direction points on the *real* celestial sphere:
  *    altitude (from the gravity-referenced gyro) + azimuth (from the compass) + your GPS
  *    latitude/longitude + the current Local Sidereal Time → (RA, Dec). Hold the phone up and it
- *    shows the actual stars overhead, and it auto-switches north↔south by where you aim. This is
- *    the real "point at the sky" behaviour.
+ *    shows the actual stars overhead, and it auto-switches north↔south by where you aim.
  *
- *  • RELATIVE (gyro only) — fallback when location/compass are denied or unsupported (e.g. desktop,
- *    or the user declines the location prompt). The view tracks how you move the phone but is not
- *    registered to true sky coordinates.
+ *  • RELATIVE (gyro only) — fallback when location/compass are denied or unsupported. The view
+ *    tracks how you move the phone but is not registered to true sky coordinates.
+ *
+ * SMOOTHNESS (Star-Walk-like): raw `deviceorientation` events are noisy and arrive at sensor
+ * rate, so driving the camera per-event looks shaky. Instead, each event only updates a TARGET
+ * look direction; `update(dt)` (called from the render loop) eases the displayed direction toward
+ * the target with a dt-corrected exponential filter, alpha = 1 − exp(−dt/τ). Easing the 3-D look
+ * VECTOR (normalized lerp) rather than scalar yaw/pitch avoids the yaw ±π wraparound glitch.
+ * τ ≈ 0.12 s for the gyro-only path; the compass-fused absolute path uses a longer τ (compass
+ * heading jitters more), trading a touch of lag for stability — same trick planetarium apps use.
  *
  * Calibration note: ALTITUDE is exact (gravity is unambiguous). The AZIMUTH sign/offset is the one
  * value that can vary by device/OS; `AZ_SIGN`/`AZ_OFFSET_DEG` below are the single knobs to nudge
@@ -28,6 +34,10 @@ import { raDecToWorld } from '../math/frames';
 const AZ_SIGN = 1; // flip to -1 if the view turns the wrong way horizontally
 const AZ_OFFSET_DEG = 0; // add a constant if north is consistently off by a fixed angle
 
+// --- smoothing time constants (seconds) ---
+const TAU_RELATIVE = 0.12; // gyro-only: tight tracking, kills sensor jitter
+const TAU_ABSOLUTE = 0.3; // compass-fused: heading jitters more → smooth harder
+
 const DEG2RAD = Math.PI / 180;
 
 const zee = new THREE.Vector3(0, 0, 1);
@@ -36,6 +46,7 @@ const q0 = new THREE.Quaternion();
 const q1 = new THREE.Quaternion(-Math.sqrt(0.5), 0, 0, Math.sqrt(0.5)); // -90° about X: look out the back
 const quat = new THREE.Quaternion();
 const look = new THREE.Vector3();
+const top = new THREE.Vector3();
 const worldDir = new THREE.Vector3();
 
 function deviceQuaternion(alpha: number, beta: number, gamma: number, orient: number): THREE.Quaternion {
@@ -82,8 +93,24 @@ export class DeviceSky {
   /** True once a real-sky (GPS + compass) fix is in use; false = relative magic-window. */
   absolute = false;
   private handler: ((e: DeviceOrientationEvent) => void) | null = null;
+  private absHandler: ((e: DeviceOrientationEvent) => void) | null = null;
+  private sawAbsoluteEvent = false;
   private latRad: number | null = null;
   private lonRad: number | null = null;
+
+  // Compass → gyro-frame north offset (radians). The flat-pose compass heading is NOT a valid
+  // look azimuth when the phone is raised at the sky (its horizontal projection degenerates),
+  // so we never use it directly: we estimate the constant offset between the gyro frame's
+  // azimuth and true north, sampled ONLY in poses where the compass is meaningful, low-passed,
+  // and then derive the look azimuth from the (continuous) gyro quaternion + this offset.
+  private compassOffset = 0;
+  private hasOffset = false;
+
+  // smoothing state: sensor events write `targetDir`; update(dt) eases `smoothDir` toward it.
+  private readonly targetDir = new THREE.Vector3(0, 0, -1);
+  private readonly smoothDir = new THREE.Vector3(0, 0, -1);
+  private hasTarget = false;
+  private hasSmooth = false;
 
   constructor(private controls: LookControls) {}
 
@@ -99,9 +126,21 @@ export class DeviceSky {
     }
     // Best-effort GPS for real-sky registration; relative magic-window if denied/unsupported.
     void this.acquireLocation();
-    this.handler = (e) => this.onOrientation(e);
+    this.handler = (e) => {
+      // prefer the north-referenced stream once it has been seen (Android)
+      if (this.sawAbsoluteEvent) return;
+      this.onOrientation(e);
+    };
+    this.absHandler = (e) => {
+      this.sawAbsoluteEvent = true;
+      this.onOrientation(e);
+    };
     addEventListener('deviceorientation', this.handler, true);
+    addEventListener('deviceorientationabsolute', this.absHandler as EventListener, true);
     this.enabled = true;
+    this.hasTarget = false;
+    this.hasSmooth = false; // snap to the first fix (no whip-pan from a stale direction)
+    this.hasOffset = false;
     return true;
   }
 
@@ -121,9 +160,34 @@ export class DeviceSky {
 
   disable(): void {
     if (this.handler) removeEventListener('deviceorientation', this.handler, true);
+    if (this.absHandler) removeEventListener('deviceorientationabsolute', this.absHandler as EventListener, true);
     this.handler = null;
+    this.absHandler = null;
+    this.sawAbsoluteEvent = false;
     this.enabled = false;
     this.absolute = false;
+    this.hasTarget = false;
+    this.hasSmooth = false;
+    this.hasOffset = false;
+  }
+
+  /**
+   * Ease the displayed direction toward the latest sensor target. Call once per rendered frame
+   * (BEFORE controls.update) with the frame delta-time in seconds.
+   */
+  update(dt: number): void {
+    if (!this.enabled || !this.hasTarget) return;
+    if (!this.hasSmooth) {
+      this.smoothDir.copy(this.targetDir);
+      this.hasSmooth = true;
+    } else {
+      const tau = this.absolute ? TAU_ABSOLUTE : TAU_RELATIVE;
+      const alpha = 1 - Math.exp(-dt / tau); // dt-corrected: identical feel at any frame rate
+      this.smoothDir.lerp(this.targetDir, alpha).normalize();
+    }
+    const pitch = Math.asin(THREE.MathUtils.clamp(this.smoothDir.y, -1, 1));
+    const yaw = Math.atan2(-this.smoothDir.x, -this.smoothDir.z);
+    this.controls.setYawPitch(yaw, pitch);
   }
 
   private onOrientation(e: DeviceOrientationEvent): void {
@@ -132,11 +196,15 @@ export class DeviceSky {
       Math.PI) /
       180;
     const q = deviceQuaternion(e.alpha * DEG2RAD, e.beta * DEG2RAD, e.gamma * DEG2RAD, orient);
-    // look direction in the gravity-referenced frame (Y = zenith)
+    // look direction in the gravity-referenced frame (X = east-ish, Y = zenith, −Z = north-ish)
     look.set(0, 0, -1).applyQuaternion(q).normalize();
+    // azimuths IN THE GYRO FRAME (north through east) — continuous over the full sphere
+    const azLookGyro = Math.atan2(look.x, -look.z);
+    top.set(0, 1, 0).applyQuaternion(q).normalize();
+    const azTopGyro = Math.atan2(top.x, -top.z);
 
     // Compass heading (deg clockwise from true north): iOS exposes webkitCompassHeading;
-    // Android exposes absolute alpha (0 = north, increasing counter-clockwise).
+    // Android's absolute stream has north-referenced alpha (0 = north, counter-clockwise).
     const ev = e as DeviceOrientationEvent & { webkitCompassHeading?: number; absolute?: boolean };
     let headingDeg: number | null = null;
     if (typeof ev.webkitCompassHeading === 'number' && isFinite(ev.webkitCompassHeading)) {
@@ -145,23 +213,32 @@ export class DeviceSky {
       headingDeg = (360 - e.alpha) % 360;
     }
 
-    if (headingDeg != null && this.latRad != null && this.lonRad != null) {
-      // ABSOLUTE: altitude from gravity-referenced gyro, azimuth from compass → real RA/Dec.
-      const alt = Math.asin(THREE.MathUtils.clamp(look.y, -1, 1));
-      const az = (AZ_SIGN * headingDeg + AZ_OFFSET_DEG) * DEG2RAD;
-      const { ra, dec } = altAzToRaDec(alt, az, this.latRad, lstRad(Date.now(), this.lonRad));
-      raDecToWorld(ra, dec, worldDir);
-      const pitch = Math.asin(THREE.MathUtils.clamp(worldDir.y, -1, 1));
-      const yaw = Math.atan2(-worldDir.x, -worldDir.z);
-      this.controls.setYawPitch(yaw, pitch);
-      this.absolute = true;
-      return;
+    // Update the gyro→north offset only while the device TOP is far enough from vertical for
+    // its horizontal compass projection to mean something (|top.y| < 0.7 ≈ tilted < 45°).
+    // While you then sweep the raised phone across the sky, the offset just holds steady.
+    if (headingDeg != null && Math.abs(top.y) < 0.7) {
+      const headingRad = (AZ_SIGN * headingDeg + AZ_OFFSET_DEG) * DEG2RAD;
+      let d = headingRad - azTopGyro - this.compassOffset;
+      d = Math.atan2(Math.sin(d), Math.cos(d)); // wrap to ±π
+      this.compassOffset += (this.hasOffset ? 0.05 : 1) * d; // snap first sample, then low-pass
+      this.hasOffset = true;
     }
 
-    // RELATIVE magic-window (no GPS/compass): drive yaw/pitch straight from the look vector.
-    this.absolute = false;
-    const pitch = Math.asin(THREE.MathUtils.clamp(look.y, -1, 1));
-    const yaw = Math.atan2(-look.x, -look.z);
-    this.controls.setYawPitch(yaw, pitch);
+    if (this.hasOffset && this.latRad != null && this.lonRad != null) {
+      // ABSOLUTE: altitude AND azimuth both from the continuous gyro quaternion (so a full
+      // 360° sweep and tilting through the zenith track correctly); the compass only anchors
+      // the frame to true north via the low-passed offset above. → real RA/Dec.
+      const alt = Math.asin(THREE.MathUtils.clamp(look.y, -1, 1));
+      const az = azLookGyro + this.compassOffset;
+      const { ra, dec } = altAzToRaDec(alt, az, this.latRad, lstRad(Date.now(), this.lonRad));
+      raDecToWorld(ra, dec, worldDir);
+      this.targetDir.copy(worldDir);
+      this.absolute = true;
+    } else {
+      // RELATIVE magic-window (no GPS/compass): target straight from the device look vector.
+      this.absolute = false;
+      this.targetDir.copy(look);
+    }
+    this.hasTarget = true;
   }
 }

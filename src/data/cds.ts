@@ -205,6 +205,8 @@ export function cutoutUrl(opts: {
   fovDeg: number;
   size?: number;
   hostIndex?: 0 | 1;
+  /** 'fits' returns the real pixel data (quantitative mode); default 'jpg' for display. */
+  format?: 'jpg' | 'fits';
 }): string {
   const p = new URLSearchParams({
     hips: opts.hipsId,
@@ -215,7 +217,7 @@ export function cutoutUrl(opts: {
     height: String(opts.size ?? 280),
     projection: 'TAN',
     coordsys: 'icrs',
-    format: 'jpg',
+    format: opts.format ?? 'jpg',
   });
   return `${HIPS2FITS[opts.hostIndex ?? 0]}?${p}`;
 }
