@@ -3,28 +3,35 @@
 A real-imagery sky atlas and real-distance 3D star-field flythrough, built on **TypeScript + Vite +
 Three.js + WebXR** and fed entirely by public astronomy services. It runs as a desktop/mobile web
 app, ships as **native iOS and Android apps via Capacitor**, and has an additive **WebXR "Enter VR"**
-mode. Two audiences: a **Pro** mode for professional astronomers (catalogues, readouts, live alert
-ingest with ML classifications) and a simplified **Public** mode for everyone else.
+mode. As functional as a planetarium, but modern — with **professional time-domain tools**. Two
+audiences sharing one modern shell: a **Pro** mode for astronomers and a simplified **Public** mode.
+
+Repo: **[github.com/kunalb541/Brahmaand](https://github.com/kunalb541/Brahmaand)** (public).
 
 > **Status: BUILT, RUNNABLE & VERIFIED — web + native iOS (Xcode `BUILD SUCCEEDED`) + native Android
 > (`app-debug.apk`).** Highlights, all live-verified:
+> - **Modern, zero-overlap UI.** App-frame layout (top bar + accordion dock + docked detail panel +
+>   one-line status), responsive with no overlaps at phone / tablet / desktop; ☰ drawer on phones.
 > - **Telescope-resolution zoom, both hemispheres.** A survey ladder (DSS2 base → Pan-STARRS /
->   DES / DECaPS / unWISE / Rubin First Look / HST / JWST) streams live HiPS tiles from CDS and
->   composites them, auto-picking the right survey by where you look so detail follows you north↔south.
-> - **109,400 real stars** (HYG parallax distances) you fly through with WASD/QE or a touch joystick;
->   planetarium↔space transition. **Click or search any object** → real SIMBAD data + hips2fits cutout.
-> - **Live all-sky alert ingest (Pro).** A **broker toggle**: **⚡ ZTF** (ALeRCE — a dense
->   ~1,100-object classified all-sky snapshot, colour-coded by ML class, topped up live near the
->   view) ⇄ **🔭 LSST** (ANTARES — the real Rubin/LSST + ZTF stream with fuller per-object tags &
->   light curves). LSST is a toggle today and becomes the default as Rubin ramps up.
-> - **Phone as a window on the sky.** Gyro + compass + GPS register the view to the *real* sky
->   (altitude from the gyro, azimuth from the compass, RA/Dec from your location + sidereal time),
->   auto-switching north/south as you move the phone; falls back to a relative magic-window without GPS.
+>   DES / DECaPS / unWISE / Rubin First Look / HST / JWST) streams live HiPS tiles from CDS.
+> - **109,400 real stars** (HYG parallax distances) you fly through with WASD/QE or a touch joystick.
+>   **Click or search any object** → real SIMBAD data + hips2fits cutout with a centre reticle.
+> - **Live all-sky alert ingest (Pro)** with a scrollable **alert feed/inbox** + class filter, a
+>   **broker toggle** ⚡ ZTF (ALeRCE, dense classified) ⇄ 🔭 LSST (ANTARES, real Rubin/LSST + ZTF),
+>   the **difference-image triptych** (science / template / difference), a light curve with error
+>   bars + upper-limit arrows, and real/bogus (drb) scores.
+> - **FITS quantitative mode** — real per-pixel values + WCS RA/Dec readout + scientific stretch
+>   (linear/log/√/asinh) and zscale, parsed accurately in-browser (no fake JPEG numbers).
+> - **Observability** — accurate altitude / azimuth / airmass + rise / transit / set + a "tonight"
+>   altitude curve for any object, from your GPS/saved location (pure client math, unit-tested).
+> - **Phone as a window on the sky.** Star-Walk-smooth gyro + compass + GPS register the view to the
+>   *real* sky (altitude from gyro, azimuth from compass, RA/Dec from location + sidereal time).
 > - **Pro / Public dual mode**, deep-link sharing, WebXR VR, $0 backend.
 >
-> See [docs/DECISIONS.md](docs/DECISIONS.md) for what's implemented vs the original spec,
-> [docs/IOS.md](docs/IOS.md) / [docs/ANDROID.md](docs/ANDROID.md) to build & install on a phone, and
-> [docs/USAGE-AND-LEGAL.md](docs/USAGE-AND-LEGAL.md) for who may use it, attribution, and scaling.
+> Plans & guidance: [docs/ACTION-PLAN.md](docs/ACTION-PLAN.md) (design + pro-feature roadmap),
+> [docs/SCALING-COMMERCIAL.md](docs/SCALING-COMMERCIAL.md) (licensing + broker/CDS server-load),
+> [docs/DECISIONS.md](docs/DECISIONS.md), [docs/IOS.md](docs/IOS.md) / [docs/ANDROID.md](docs/ANDROID.md)
+> (build & install on a phone), [docs/USAGE-AND-LEGAL.md](docs/USAGE-AND-LEGAL.md) (attribution).
 
 ## Quick start
 

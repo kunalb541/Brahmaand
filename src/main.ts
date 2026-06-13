@@ -685,8 +685,15 @@ const hipsStatus = document.getElementById('hips-slot')!;
 hipsStatus.classList.add('pro-only');
 applyMode(); // re-apply: hipsStatus (pro-only) is tagged after the initial applyMode()
 
+let hudAccum = 0;
 startLoop(renderer, (dt) => {
   try {
+    // throttle text-HUD DOM writes to ~10 Hz — the 3-D scene still renders every frame, but
+    // rebuilding the readout/status strings 60×/s is wasted main-thread work (smoother on mobile).
+    hudAccum += dt;
+    const hudTick = hudAccum >= 0.1;
+    if (hudTick) hudAccum = 0;
+
     deviceSky.update(dt); // ease toward the latest gyro/compass fix (smooth, Star-Walk-like)
     if (!renderer.xr.isPresenting) controls.update(dt);
     fly.update(dt);
@@ -741,11 +748,13 @@ startLoop(renderer, (dt) => {
         lastFetchDir.copy(viewDir);
         void fetchTransientsNearView();
       }
-      const ago = lastAlertUpdate ? Math.round((Date.now() - lastAlertUpdate) / 1000) : -1;
-      liveStatus.textContent =
-        ago < 0
-          ? '◌ connecting to broker…'
-          : `● LIVE · ${transientMap.size} alerts · updated ${ago}s ago`;
+      if (hudTick) {
+        const ago = lastAlertUpdate ? Math.round((Date.now() - lastAlertUpdate) / 1000) : -1;
+        liveStatus.textContent =
+          ago < 0
+            ? '◌ connecting to broker…'
+            : `● LIVE · ${transientMap.size} alerts · updated ${ago}s ago`;
+      }
     }
 
     // catalogue overlays: Earth-view; refetch around the new view when panned
@@ -760,13 +769,13 @@ startLoop(renderer, (dt) => {
       }
     }
 
-    readout.update();
+    if (hudTick) readout.update();
     starLabels.update();
     renderer.render(scene, camera);
     hud.tick(dt);
 
     // honest tile status: names the active survey and says when you're outside its coverage
-    hipsStatus.textContent =
+    if (hudTick) hipsStatus.textContent =
       dist < 1
         ? hips.order
           ? `${currentSurvey.name} · order ${hips.order} · ${hips.readyCount}/${hips.tileCount} tiles` +
