@@ -1,5 +1,12 @@
 # ROADMAP — Master Build Plan
 
+> **Status (2026-06-13): all original phases (0–8) are built, runnable & verified** — web + native
+> iOS (`BUILD SUCCEEDED`) + native Android (`app-debug.apk`). This file is kept as the **original
+> build blueprint** (historical); some specifics shifted in implementation (e.g. the secondary
+> broker is **ANTARES**, not Fink; the live broker pair is **ALeRCE/ZTF ⇄ ANTARES/Rubin-LSST**).
+> For the current state and plan see **[docs/ACTION-PLAN.md](docs/ACTION-PLAN.md)**,
+> **[docs/STELLARIUM-PARITY.md](docs/STELLARIUM-PARITY.md)**, and **[README.md](README.md)**.
+
 ```yaml
 doc: ROADMAP
 status: stable (planning phase)

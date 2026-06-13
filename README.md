@@ -3,32 +3,53 @@
 A real-imagery sky atlas and real-distance 3D star-field flythrough, built on **TypeScript + Vite +
 Three.js + WebXR** and fed entirely by public astronomy services. It runs as a desktop/mobile web
 app, ships as **native iOS and Android apps via Capacitor**, and has an additive **WebXR "Enter VR"**
-mode. As functional as a planetarium, but modern — with **professional time-domain tools**. Two
-audiences sharing one modern shell: a **Pro** mode for astronomers and a simplified **Public** mode.
+mode. As functional as a planetarium, but modern — with a **full solar system + time machine** and
+**professional time-domain tools**. Two audiences sharing one modern shell: a **Pro** mode for
+astronomers and a simplified **Public** mode.
 
 Repo: **[github.com/kunalb541/Brahmaand](https://github.com/kunalb541/Brahmaand)** (public).
 
 > **Status: BUILT, RUNNABLE & VERIFIED — web + native iOS (Xcode `BUILD SUCCEEDED`) + native Android
 > (`app-debug.apk`).** Highlights, all live-verified:
 > - **Modern, zero-overlap UI.** App-frame layout (top bar + accordion dock + docked detail panel +
->   one-line status), responsive with no overlaps at phone / tablet / desktop; ☰ drawer on phones.
-> - **Telescope-resolution zoom, both hemispheres.** A survey ladder (DSS2 base → Pan-STARRS /
->   DES / DECaPS / unWISE / Rubin First Look / HST / JWST) streams live HiPS tiles from CDS.
-> - **109,400 real stars** (HYG parallax distances) you fly through with WASD/QE or a touch joystick.
->   **Click or search any object** → real SIMBAD data + hips2fits cutout with a centre reticle.
-> - **Live all-sky alert ingest (Pro)** with a scrollable **alert feed/inbox** + class filter, a
+>   time bar + one-line status), responsive with no overlaps at phone / tablet / desktop; ☰ drawer
+>   on phones. Pro ⇄ Public modes share the shell.
+> - **Telescope-resolution zoom, both hemispheres.** A survey ladder (DSS2 colour base →
+>   Pan-STARRS / DES / DECaPS / unWISE / Rubin First Look / HST fields / JWST Carina / Mellinger)
+>   streams live HiPS tiles from CDS, with exposure control and public-mode auto-survey.
+> - **747k real stars** — Gaia DR3 (638k) + HYG (109k brightest) vendored binaries with real
+>   parallax distances; fly through them with WASD/QE or a touch joystick, photometric exposure.
+> - **Solar system.** Sun, Moon (correct phase drawn, bright limb toward the Sun, topocentric
+>   parallax when location is set) and all 7 planets from JPL approximate Keplerian elements
+>   (valid 1800–2050) + truncated lunar theory; approximate magnitudes labelled as such; click any
+>   body for distance, angular diameter, illumination/phase and observability. **Accuracy is proven
+>   against real events:** unit tests reproduce the 2020-12-21 Jupiter–Saturn great conjunction and
+>   the 2017-08-21 total solar eclipse (geocentric *and* topocentric from the totality path).
+> - **Time machine.** Time bar with −1d/+1d, rates ±1 s/s to ±1 yr/s, pause, click-to-type date,
+>   ● Now; amber when warped; drives the solar system, observability and the horizon grid.
+> - **Observability** — altitude / azimuth / airmass + rise / transit / set + a "tonight" altitude
+>   curve (sunset→sunrise, twilight shaded) for any object, from GPS or a saved manual location;
+>   follows sim time (pure client math, unit-tested).
+> - **Grids & catalogues.** Equatorial grid + celestial equator, ecliptic + precession circles,
+>   galactic equator, observer horizon (alt/az) grid; constellation stick figures + official IAU
+>   boundaries; all **110 Messier objects** (positions from SIMBAD) with clickable, decluttering labels.
+> - **Tools.** FOV framing circle (5°/1°/30′/15′/5′, true angular size), 📐 two-click great-circle
+>   measure (°/′/″, chainable), share deep links (`#ra&dec&fov&survey`), full hotkeys + ⌘K/Ctrl-K
+>   command palette (see table below).
+> - **Live all-sky alert ingest (Pro)** with a scrollable **alert feed** + class filter, a
 >   **broker toggle** ⚡ ZTF (ALeRCE, dense classified) ⇄ 🔭 LSST (ANTARES, real Rubin/LSST + ZTF),
->   the **difference-image triptych** (science / template / difference), a light curve with error
->   bars + upper-limit arrows, and real/bogus (drb) scores.
-> - **FITS quantitative mode** — real per-pixel values + WCS RA/Dec readout + scientific stretch
->   (linear/log/√/asinh) and zscale, parsed accurately in-browser (no fake JPEG numbers).
-> - **Observability** — accurate altitude / azimuth / airmass + rise / transit / set + a "tonight"
->   altitude curve for any object, from your GPS/saved location (pure client math, unit-tested).
-> - **Phone as a window on the sky.** Star-Walk-smooth gyro + compass + GPS register the view to the
->   *real* sky (altitude from gyro, azimuth from compass, RA/Dec from location + sidereal time).
+>   an **ANTARES Streams explorer** (12 community tags, e.g. `nuclear_transient`, anomaly detectors),
+>   the **difference-image triptych** (science / template / difference), light curves with error
+>   bars + upper-limit arrows (g/r/i), ML class probabilities and real/bogus (drb) scores.
+> - **FITS quantitative mode (Pro)** — real per-pixel values + WCS RA/Dec readout + scientific
+>   stretches (linear/log/√/asinh) and zscale, parsed accurately in-browser (no fake JPEG numbers).
+> - **Phone as a window on the sky.** Star-Walk-smooth gyro + compass + GPS register the view to
+>   the *real* sky (altitude from gravity, azimuth from compass, RA/Dec from location + sidereal
+>   time); falls back to relative magic-window without sensors.
 > - **Pro / Public dual mode**, deep-link sharing, WebXR VR, $0 backend.
 >
 > Plans & guidance: [docs/ACTION-PLAN.md](docs/ACTION-PLAN.md) (design + pro-feature roadmap),
+> [docs/STELLARIUM-PARITY.md](docs/STELLARIUM-PARITY.md) (parity audit),
 > [docs/SCALING-COMMERCIAL.md](docs/SCALING-COMMERCIAL.md) (licensing + broker/CDS server-load),
 > [docs/DECISIONS.md](docs/DECISIONS.md), [docs/IOS.md](docs/IOS.md) / [docs/ANDROID.md](docs/ANDROID.md)
 > (build & install on a phone), [docs/USAGE-AND-LEGAL.md](docs/USAGE-AND-LEGAL.md) (attribution).
@@ -39,15 +60,16 @@ Repo: **[github.com/kunalb541/Brahmaand](https://github.com/kunalb541/Brahmaand)
 npm install
 npm run dev          # → http://localhost:5173  (look around the real sky)
 npm run build        # typecheck + production bundle into dist/
-npm test             # unit tests (coordinate-frame math)
+npm test             # 22 unit tests (frames, ephemeris, observability, FITS)
 
 # Native apps (Capacitor) — see docs/IOS.md and docs/ANDROID.md
 npm run ios:sync && npm run ios:open       # build web → open in Xcode → ▶ to your iPhone
 npm run android:sync && npm run android:open  # build web → open in Android Studio → ▶ / build APK
 
-# Refresh the live alert snapshots (real broker data; re-runnable nightly)
+# Refresh the bundled data snapshots (all real services; re-runnable)
 node tools/build-transients-ztf.mjs        # dense ZTF/ALeRCE  → public/transients/tonight.json
 node tools/build-transients.mjs            # ANTARES Rubin/LSST → public/transients/tonight-antares.json
+node tools/build-messier.mjs               # Messier M1–M110 from SIMBAD TAP → public/data/messier.json
 ```
 
 **Send the Android app to a friend:** build the debug APK (`cd android && ./gradlew assembleDebug`
@@ -57,161 +79,186 @@ received it through, then tap the APK to install. No Play Store or developer acc
 [docs/ANDROID.md](docs/ANDROID.md) for signed-release and Play Store options.
 
 Real assets are already vendored under `public/` (DSS2 + Mellinger all-sky JPEGs, constellation
-lines) so it runs offline with no API calls. WebXR needs a secure context — `localhost` counts;
-for a headset on your LAN, run `npm run dev -- --host` behind an HTTPS tunnel (see
+lines + IAU boundaries, star binaries, Messier catalogue, transient snapshots) and a service worker
+provides an offline shell. WebXR needs a secure context — `localhost` counts; for a headset on your
+LAN, run `npm run dev -- --host` behind an HTTPS tunnel (see
 [docs/research/deploy-assets.md](docs/research/deploy-assets.md) §5). No headset? The VR button
 shows "VR NOT SUPPORTED" and everything works as a normal 3D app; test VR via the Immersive Web
 Emulator.
 
-**What's implemented vs. planned:** PHASE-0 (engine skeleton), PHASE-1 (real-imagery sky), PHASE-2
-(live HiPS tile streaming), and PHASE-3 (3D star-field flythrough) are code. PHASE-4+ add the full
-Gaia DR3 pipeline, object search, full WebXR, transients, and deploy — see [ROADMAP.md](ROADMAP.md).
-Each shipped phase is a pragmatic subset of its full spec (e.g. PHASE-2: per-tile meshes, DSS2 only;
-PHASE-3: HYG catalogue instead of the Gaia pipeline, no octree LOD / floating-origin) — see
-[docs/DECISIONS.md](docs/DECISIONS.md) for the exact deviations and what's deferred.
+The star binaries are vendored (`public/catalogs/hyg.bin` 2 MB, `public/catalogs/gaia.bin` 12 MB).
+To regenerate: `curl -L <HYG v4.1 csv> -o data-src/hyg.csv && node tools/build-stars.mjs` for HYG,
+and `node tools/build-gaia.mjs` for the Gaia DR3 extract (live ESA Gaia TAP, no account needed).
 
-The 3D star catalogue (`public/catalogs/hyg.bin`, 2 MB) is vendored. To regenerate it from source:
-`curl -L <HYG v4.1 csv> -o data-src/hyg.csv && node tools/build-stars.mjs`.
+### Keyboard shortcuts
+
+| Key | Action | Key | Action |
+|---|---|---|---|
+| `C` | constellation figures | `B` | IAU boundaries |
+| `L` | star labels | `M` | Messier objects |
+| `G` | equatorial grid | `E` | ecliptic |
+| `H` | horizon grid | `P` | planets |
+| `T` | live alerts | `F` | FOV circle |
+| `[` `]` | time ±1 day | `N` | back to now |
+| `/` | search | `?` | help |
+
+`⌘K` / `Ctrl-K` opens the command palette (all commands; falls through to sky search).
+
+### Stopping local dev processes
+
+The dev server and the native toolchains spawn background processes. To stop everything cleanly:
+
+```bash
+# Vite dev server (Ctrl-C in its terminal, or by port):
+lsof -ti :5173 | xargs kill        # kills whatever holds the dev-server port
+
+# Android Gradle daemons (they linger after a build):
+cd android && ./gradlew --stop
+
+# Any stray bundler/build workers:
+pkill -f vite ; pkill -f esbuild   # optional, only if something is stuck
+
+# Xcode/simulator (if a simulator build was launched):
+xcrun simctl shutdown all          # stop running simulators
+```
+
+Nothing in this project runs as a service or daemon by default — closing the terminals that ran
+`npm run dev` / Gradle / Xcode is enough; the commands above are the belt-and-suspenders version.
+
+### Codebase map (graphify, optional)
+
+A queryable knowledge graph of the source is committed at `graphify-out/graph.json` (built with
+[graphify](https://github.com/safishamsi/graphify) — 526 nodes / 983 edges from `src/` + `tools/`,
+AST-only so it's generated **fully offline, no API key**). Regenerate after big refactors:
+
+```bash
+uv tool install graphifyy          # one-time (or: pipx install graphifyy)
+graphify extract . --no-cluster    # re-extract the code graph (.graphifyignore scopes it to src/+tools/)
+graphify query "what wires the time machine into the render loop?"   # ask the graph
+```
+
+`.graphifyignore` limits indexing to code, so no docs/imagery are sent anywhere. To wire it into an
+AI assistant (Claude Code, Cursor, …) run `graphify install` — see the graphify README for per-tool
+setup.
 
 ---
 
 ## What the app is
 
-Three pillars (detailed in [docs/00-vision.md](docs/00-vision.md)):
+Three pillars (original vision in [docs/00-vision.md](docs/00-vision.md)):
 
-1. **Real-imagery sky.** Actual survey photography (DSS2 color, Pan-STARRS DR1, SDSS9, 2MASS,
-   Mellinger, Rubin First Look) streamed as **HiPS tiles** (IVOA Hierarchical Progressive Survey
-   standard) from CDS servers and textured onto an inside-out celestial sphere. Pan, zoom, and
-   switch surveys; everything you see is a real photograph of the sky.
-2. **Real-distance 3D flythrough.** 1.9M–4.7M stars from **Gaia DR3** with Bailer-Jones
-   geometric/photogeometric distances, preprocessed offline into compact static binary chunks
-   (~16 B/star, octree LOD), streamed into a custom Three.js point/impostor renderer. Leave Earth
-   and fly through the actual solar neighborhood — parallax is real.
+1. **Real-imagery sky.** Actual survey photography (DSS2 colour base, Pan-STARRS, DES, DECaPS,
+   unWISE, Rubin First Look, HST fields, JWST Carina, Mellinger Milky Way) streamed as **HiPS
+   tiles** (IVOA Hierarchical Progressive Survey standard) from CDS servers and textured onto an
+   inside-out celestial sphere. Pan, zoom to telescope resolution, switch surveys, adjust exposure;
+   everything you see is a real photograph of the sky.
+2. **Real-distance 3D flythrough.** 638k **Gaia DR3** stars + the 109k brightest from HYG, vendored
+   as compact static binaries with real parallax distances, rendered as a custom Three.js point
+   field with photometric exposure. Leave Earth and fly through the actual solar neighborhood
+   (WASD/QE or touch joystick) — parallax is real.
 3. **Live transient layer ("what changed tonight", Pro).** All-sky alerts surfaced via community
    broker REST APIs with a runtime toggle: **ALeRCE/ZTF** (dense, classified — the LSST-precursor
-   stream) and **ANTARES** (the real Rubin/LSST + ZTF stream, fuller per-object tags). Markers are
-   coloured by ML class; click for classification, light curve, real/bogus flag, and cutout stamp.
+   stream) and **ANTARES** (the real Rubin/LSST + ZTF stream), plus an **ANTARES Streams** dropdown
+   exploring 12 community tags (e.g. `nuclear_transient`, anomaly detectors, `sso_confirmed`).
+   Markers are coloured by ML class; click for classification + probabilities, a light curve with
+   error bars + upper-limit arrows, real/bogus score, the science/template/difference cutout
+   triptych and a broker link. Live cone polling near the view; bundled snapshots as fallback.
 
 Supporting features:
 
-- **Object info on gaze/click** via SIMBAD cone search + TAP, name search via Sesame, postage-stamp
-  cutouts via hips2fits — all CORS-open, called directly from the browser, no backend.
+- **Solar system + time machine** — Sun, Moon and planets from JPL approximate elements, driven by
+  a scrubable simulation clock (±1 s/s to ±1 yr/s); see status callout above.
+- **Object info on click/tap** — solar-system body, else transient marker, else SIMBAD cone search;
+  name search via Sesame; catalog overlays Gaia DR3 / 2MASS / AllWISE / Chandra via VizieR;
+  hips2fits postage-stamp cutouts with a centre reticle on every popup — all CORS-open, called
+  directly from the browser, no backend.
+- **Good-neighbour networking** — client rate limiters (CDS ≈4/s, brokers 3/s), cone caching,
+  polite retry with exponential backoff honouring `Retry-After`, live polling paused in hidden
+  tabs; HiPS tiles hotlinked and browser-cached, never mirrored.
 - **WebXR `immersive-vr` mode** (Quest-class headsets) as an additive layer over the same scene;
-  mobile gets touch + opt-in gyroscope "magic window".
-- **$0/month infrastructure**: static hosting (Cloudflare Pages) + Cloudflare R2 for catalog
-  chunks + hotlinked CDS HiPS tiles; the only conditional server component is a ~15-line stateless
-  caching proxy for alert brokers (only if their CORS turns out closed — VERIFY at M7).
+  mobile gets touch + gyro/compass/GPS sky-lock AR (or relative magic-window without sensors).
+- **$0/month infrastructure** — static hosting, vendored data under `public/`, hotlinked CDS HiPS
+  tiles, no backend, no accounts.
 
 ```mermaid
 flowchart LR
   subgraph services["Public data services"]
-    CDS["CDS alasky / alaskybis<br/>HiPS tiles, hips2fits,<br/>SIMBAD, VizieR, Sesame, MocServer"]
-    ESA["ESA Gaia TAP<br/>(build-time only, no CORS)"]
-    BROKERS["Rubin alert brokers<br/>ALeRCE / Fink"]
+    CDS["CDS alasky / alaskybis<br/>HiPS tiles, hips2fits,<br/>SIMBAD, VizieR, Sesame"]
+    ESA["ESA Gaia TAP + SIMBAD TAP<br/>(build-time scripts)"]
+    BROKERS["Alert brokers<br/>ALeRCE (ZTF) + ANTARES (Rubin/LSST)"]
   end
-  subgraph infra["Our static infra ($0/mo)"]
-    PIPE["Offline Python pipeline<br/>Gaia DR3 → binary chunks"]
-    R2["Cloudflare R2<br/>star chunks + manifest"]
-    PAGES["Cloudflare Pages<br/>app shell (Vite build)"]
+  subgraph build["Build-time scripts (tools/*.mjs)"]
+    PIPE["build-gaia / build-stars /<br/>build-messier / build-transients*"]
   end
-  subgraph browser["Browser"]
-    APP["Three.js renderer<br/>HiPS sphere + Gaia points<br/>+ transient markers"]
+  subgraph browser["Browser / native shell (Capacitor)"]
+    APP["Three.js renderer<br/>HiPS sphere + star field + solar system<br/>+ grids + transient markers"]
     XR["WebXR 'Enter VR'<br/>(additive mode)"]
   end
-  ESA --> PIPE --> R2
-  R2 --> APP
+  ESA --> PIPE -->|"vendored under public/"| APP
   CDS --> APP
-  BROKERS -->|"direct, or thin proxy<br/>if CORS closed (VERIFY)"| APP
-  PAGES --> APP
+  BROKERS -->|"direct CORS, rate-limited,<br/>snapshot fallback"| APP
   APP --> XR
 ```
 
-## Tech stack (pinned, verified on npm 2026-06-11)
+## Tech stack (pinned — see package.json)
 
 | Component | Choice | Version |
 |---|---|---|
 | Language / build | TypeScript + Vite (`vanilla-ts`) | `typescript@6.0.3`, `vite@8.0.16` |
-| 3D engine | Three.js, **WebGLRenderer** (not WebGPU yet — see [ROADMAP.md](ROADMAP.md) §"What could change this plan") | `three@0.184.0` + `@types/three@0.184.1` (pin exactly, no `^`) |
-| HEALPix math | `healpix-ts` (MIT, Development Seed) | `1.1.0` (fallback: `@hscmap/healpix@1.4.12`) |
-| VR UI | `@pmndrs/uikit` (vanilla API) | `1.0.73` |
-| XR emulation | Immersive Web Emulator extension + `iwer` | `iwer@2.2.1` |
-| Offline pipeline | Python 3.12+, astroquery, astropy, numpy | — |
-| Hosting | Cloudflare Pages + R2 (custom domain), GitHub Actions CI | — |
+| 3D engine | Three.js, **WebGLRenderer** | `three@0.184.0` + `@types/three@0.184.1` (pinned exactly, no `^`) |
+| HEALPix math | `healpix-ts` (MIT, Development Seed) | `1.1.0` |
+| Native shell | Capacitor (iOS via SPM — no CocoaPods; Android via Gradle) | `@capacitor/*@^8.4` |
+| Tests | Vitest | `3.2.4` |
+| Data pipeline | Node scripts in `tools/` (Gaia TAP, SIMBAD TAP, ALeRCE, ANTARES, HYG) | — |
+| Hosting / CI | Static hosting, no backend; GitHub Actions (typecheck + test + build on push; Pages deploy on manual dispatch) | — |
 
 ## Documentation map
 
-**A new contributor or AI implementer must read [plan/AGENT_INSTRUCTIONS.md](plan/AGENT_INSTRUCTIONS.md) first** — it defines how to work in this repo, then proceed in the order below.
-
-### Core design docs (`docs/`)
+### Current docs
 
 | Doc | Contents |
 |---|---|
-| [docs/00-vision.md](docs/00-vision.md) | Product vision: users, the three pillars, v1 non-goals, desktop vs VR UX walkthrough, design principles (scientific honesty) |
-| [docs/01-architecture.md](docs/01-architecture.md) | System architecture: modules, scene graph, data flow, protocol abstractions (HiPS layer / TransientProvider / CutoutService), coordinate frames |
-| [docs/02-data-sources.md](docs/02-data-sources.md) | Every external service: verified endpoints, CORS status, formats, limits, attribution requirements, failover |
-| [docs/03-hips-implementation.md](docs/03-hips-implementation.md) | The HiPS sky renderer: tile addressing, HEALPix geometry, Allsky bootstrap, order selection, texture-array pool, UV-orientation verification |
-| [docs/04-star-catalog-pipeline.md](docs/04-star-catalog-pipeline.md) | Offline Gaia DR3 pipeline: ADQL extraction, Bailer-Jones distances, color conversion, binary chunk format, octree LOD, hosting |
-| [docs/05-webxr-vr.md](docs/05-webxr-vr.md) | WebXR integration: session wiring, input abstraction, VR UI, headset-free testing, Quest tuning, mobile magic-window |
-| [docs/06-performance.md](docs/06-performance.md) | Frame budgets per platform, draw-call/texture/point ceilings, GC rules, profiling toolchain |
-| [docs/07-pitfalls.md](docs/07-pitfalls.md) | Known traps (dead hostnames, CORS blocks, gl_PointSize clamps, sRGB blending, BigInt IDs…) and their mitigations |
-| [docs/08-testing.md](docs/08-testing.md) | Test strategy: unit fixtures (healpy-validated HEALPix), visual diffs vs Aladin Lite, IWER-driven XR tests, perf regression gates |
+| [docs/ACTION-PLAN.md](docs/ACTION-PLAN.md) | Design + pro-feature roadmap: what's done, what's next, in priority order |
+| [docs/STELLARIUM-PARITY.md](docs/STELLARIUM-PARITY.md) | Feature-by-feature parity audit against Stellarium |
+| [docs/SCALING-COMMERCIAL.md](docs/SCALING-COMMERCIAL.md) | What it takes to sell or scale: licensing blockers, broker/CDS server-load etiquette |
+| [docs/USAGE-AND-LEGAL.md](docs/USAGE-AND-LEGAL.md) | Attribution requirements and usage rules for every data provider |
+| [docs/IOS.md](docs/IOS.md) | Build & install the native iOS app (Xcode, SPM, free Apple-ID signing) |
+| [docs/ANDROID.md](docs/ANDROID.md) | Build & install the native Android app (debug APK sideload, signed release) |
+| [docs/DECISIONS.md](docs/DECISIONS.md) | Every deviation from the original blueprint, with reasons |
+| [DATA-LICENSES.md](DATA-LICENSES.md) | Licenses and attribution for all bundled data and imagery |
 
-### Build plan (`plan/`)
+### Original build blueprint (historical)
 
-| Plan file | Milestone (see [ROADMAP.md](ROADMAP.md)) |
-|---|---|
-| [plan/AGENT_INSTRUCTIONS.md](plan/AGENT_INSTRUCTIONS.md) | **Read first** — working rules for implementing agents |
-| [plan/PHASE-0.md](plan/PHASE-0.md) | M0 — Project scaffold & engine skeleton |
-| [plan/PHASE-1.md](plan/PHASE-1.md) | M1 — HiPS sky renderer (pan/zoom real sky) |
-| [plan/PHASE-2.md](plan/PHASE-2.md) | M2 — Gaia DR3 offline catalog pipeline |
-| [plan/PHASE-3.md](plan/PHASE-3.md) | M3 — 3D star-field flythrough |
-| [plan/PHASE-4.md](plan/PHASE-4.md) | M4 — Object info, search & cutouts |
-| [plan/PHASE-5.md](plan/PHASE-5.md) | M5 — WebXR VR mode |
-| [plan/PHASE-6.md](plan/PHASE-6.md) | M6 — Performance hardening & mobile |
-| [plan/PHASE-7.md](plan/PHASE-7.md) | M7 — Rubin/LSST transient layer |
-
-### Research dumps (`docs/research/`) — primary sources, live-verified 2026-06-11
-
-| Dump | Topic |
-|---|---|
-| [docs/research/hips-format.md](docs/research/hips-format.md) | IVOA HiPS 1.0 spec at implementation depth; verified survey URLs, CORS, Allsky, tile math |
-| [docs/research/healpix-math.md](docs/research/healpix-math.md) | HEALPix NESTED math (projection, corners, query_disc) + 2026 JS library survey |
-| [docs/research/gaia-pipeline.md](docs/research/gaia-pipeline.md) | Gaia archive TAP, live-verified star counts, Bailer-Jones table, chunk format design |
-| [docs/research/lsst-rubin.md](docs/research/lsst-rubin.md) | Rubin/LSST access state for unaffiliated devs; live-verified broker APIs and public HiPS |
-| [docs/research/threejs-webxr.md](docs/research/threejs-webxr.md) | Three.js r184 + WebXR wiring, renderer choice, emulation, Vite/TS tooling |
-| [docs/research/star-rendering.md](docs/research/star-rendering.md) | Million-star point rendering: hybrid Points/impostors, photometry, precision, prior art |
-| [docs/research/tap-apis.md](docs/research/tap-apis.md) | TAP/cone/Sesame/hips2fits endpoints with live CORS probes; the ESA Gaia CORS block |
-| [docs/research/performance-quest.md](docs/research/performance-quest.md) | Quest 2/3 frame budgets, FFR, texture pools, GC, profiling |
-| [docs/research/deploy-assets.md](docs/research/deploy-assets.md) | Hosting comparison, chunk compression, service worker, CDS hotlinking policy, CI |
-| [docs/research/existing-projects.md](docs/research/existing-projects.md) | License gate for Aladin Lite/WWT/Stellarium/Gaia Sky/etc.; what we may copy from (only MIT WWT) |
-
-Each research dump separates **VERIFIED** facts (with source URLs and live HTTP probe results) from
-UNVERIFIED/derived claims. Design docs carry forward unresolved items as explicit `VERIFY:` markers
-— treat every `VERIFY:` as a required runtime test before the claim is relied on.
-
-## How to start (new contributor or fresh AI model)
-
-1. **Read [plan/AGENT_INSTRUCTIONS.md](plan/AGENT_INSTRUCTIONS.md).** It is the contract for how
-   work proceeds in this repo (conventions, license rules, definition of done).
-2. Read [docs/00-vision.md](docs/00-vision.md) and [docs/01-architecture.md](docs/01-architecture.md)
-   for the what and the shape.
-3. Read [ROADMAP.md](ROADMAP.md) and pick the lowest-numbered incomplete milestone.
-4. Read that milestone's `plan/PHASE-N.md` plus the design docs it cites; consult
-   `docs/research/*` when you need the primary evidence behind a decision.
-5. Honor the hard rules: pin dependency versions exactly; **never copy code from GPL/AGPL/LGPL
-   projects** (Aladin Lite, Stellarium Web Engine) — WWT (MIT) and OpenSpace (MIT) are the only
-   surveyed copy-from codebases; keep every `VERIFY:` item as a test, not an assumption.
+The repo was built from a detailed up-front blueprint, kept for reference: the numbered design docs
+([docs/00-vision.md](docs/00-vision.md) … [docs/08-testing.md](docs/08-testing.md)), the phase plans
+in [`plan/`](plan/) (with [plan/AGENT_INSTRUCTIONS.md](plan/AGENT_INSTRUCTIONS.md) as the working
+contract), the live-verified research dumps in [`docs/research/`](docs/research/) (HiPS format,
+HEALPix math, Gaia pipeline, Rubin/LSST access, TAP/CORS probes, Quest performance, deploy, license
+gates for existing projects), and [ROADMAP.md](ROADMAP.md). Each shipped phase is a pragmatic subset
+of its spec — [docs/DECISIONS.md](docs/DECISIONS.md) records the exact deviations.
+[docs/PRO-ROADMAP.md](docs/PRO-ROADMAP.md) is superseded by [docs/ACTION-PLAN.md](docs/ACTION-PLAN.md).
 
 ## Status & key constraints
 
-- **Phase:** built, runnable & verified on web + native iOS + native Android (see status callout at
-  top). The `plan/` + `docs/research/` files are the original blueprint; each shipped phase is a
-  pragmatic subset of its spec — [docs/DECISIONS.md](docs/DECISIONS.md) records every deviation.
-  Re-verify CORS headers and npm versions before relying on them at build time.
-- **No VR headset on the team.** Everything must run as a plain desktop/mobile web app; VR is
-  developed against the Immersive Web Emulator + IWER. On-device Quest performance validation is an
-  open logistics item (see [ROADMAP.md](ROADMAP.md), M6).
-- **No accounts, no stateful backend** in v1 (see non-goals in [docs/00-vision.md](docs/00-vision.md)).
+- **Phase: built, runnable & verified** on web + native iOS (Xcode `BUILD SUCCEEDED`, SPM, no
+  CocoaPods) + native Android (`app-debug.apk` ~18 MB, `BUILD SUCCESSFUL`).
+- **22 unit tests passing** — coordinate frames (4), FITS parsing (4), observability (6), ephemeris
+  (8, including the 2020 great-conjunction and 2017 total-eclipse anchors). Typecheck clean,
+  production build green.
+- **CI:** GitHub Actions runs typecheck + test + build on every push (green); Pages deploy only on
+  manual dispatch (Pages not enabled yet).
+- **Remaining (optional polish):** NGC/IC deep catalogue, eclipse/conjunction finder UI, exoplanet
+  overlay, tabbed detail panel, i18n, planet moons, Gaia deep tiers, constellation art/cultures.
+  Backend-gated (out of scope for the $0 design): ZTF/LSST forced photometry, TNS names,
+  watchlists, Kafka streams.
+- **Commercial blockers** (see [docs/SCALING-COMMERCIAL.md](docs/SCALING-COMMERCIAL.md)): the
+  Mellinger panorama is non-commercial and must be replaced before selling; the Gaia/HYG-derived
+  star binaries are CC BY-SA; an attribution UI is mandatory.
+- **No VR headset on the team.** Everything runs as a plain desktop/mobile web app; VR is developed
+  against the Immersive Web Emulator. The AR compass calibration knobs (`AZ_SIGN`/`AZ_OFFSET_DEG`)
+  await an on-device check.
+- **No accounts, no stateful backend** — all services are called directly from the browser with
+  client-side rate limiting and polite backoff.
 - **Attribution is mandatory**: DSS2 (STScI acknowledgment), ESA/Gaia/DPAC (CC BY-SA 3.0 IGO),
   Rubin First Look (ODbL-1.0, RubinObs/NOIRLab/SLAC/NSF/DOE/AURA), CDS services, broker credits.
   The UI must display `obs_copyright` strings from HiPS `properties` files.
@@ -219,6 +266,7 @@ UNVERIFIED/derived claims. Design docs carry forward unresolved items as explici
 ## License
 
 Source code: **MIT** ([LICENSE](LICENSE)). Bundled data and imagery carry their own provider
-licenses (HYG catalogue CC BY-SA 4.0; DSS2/STScI; Mellinger panorama non-commercial; constellation
-lines BSD-3) — see **[DATA-LICENSES.md](DATA-LICENSES.md)** for full attribution and the implications
-for public/commercial use.
+licenses (Gaia DR3 + HYG derived star binaries CC BY-SA; DSS2/STScI; Mellinger panorama
+non-commercial; constellation lines + boundaries BSD-3) — see
+**[DATA-LICENSES.md](DATA-LICENSES.md)** for full attribution and the implications for
+public/commercial use.

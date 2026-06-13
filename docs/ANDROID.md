@@ -4,10 +4,13 @@ Same model as iOS: the `dist/` web build wrapped by **Capacitor** into a native 
 (WebView + the same native plugins). The Gradle project is **committed at
 [`android/`](../android)** (its template `.gitignore` excludes build artifacts).
 
-> **Status 2026-06-12:** ✅ **the APK builds** — `./gradlew assembleDebug` returns **BUILD
-> SUCCESSFUL** (2m39s) and produces `android/app/build/outputs/apk/debug/app-debug.apk` (~18 MB),
-> using Android Studio's bundled JDK (JBR) + SDK android-36. `adb install` it on a phone, or
-> `npm run android:open` to run from Studio. Build env (set these or use Studio's):
+> **Status 2026-06-13:** ✅ **the APK builds** — `./gradlew assembleDebug` returns **BUILD
+> SUCCESSFUL** and produces `android/app/build/outputs/apk/debug/app-debug.apk` (~18 MB) with the
+> full feature set (solar system and time machine included), using Android Studio's bundled JDK
+> (JBR) + SDK android-36. Location permissions are declared in the manifest but optional — the
+> location and compass hardware features are marked `required="false"`, so the app installs and
+> runs without them. `adb install` it on a phone, or `npm run android:open` to run from Studio.
+> Build env (set these or use Studio's):
 > `JAVA_HOME=/Applications/Android Studio.app/Contents/jbr/Contents/Home`,
 > `ANDROID_SDK_ROOT=~/Library/Android/sdk`.
 

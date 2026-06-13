@@ -316,3 +316,100 @@ See [plan/AGENT_INSTRUCTIONS.md](../plan/AGENT_INSTRUCTIONS.md) §6.
   iOS `Info.plist` gained `NSLocationWhenInUseUsageDescription` + `NSMotionUsageDescription`; Android
   manifest gained `ACCESS_*_LOCATION` + compass/location `uses-feature` (optional). On-device.
 - **UX:** search box moved top-right (was top-centre, overlapped the top-left HUD on narrow widths).
+
+## 2026-06-13 — Rendering-bug root causes (sky sphere, survey switching, gyro feel)
+
+- **Sky sphere `BackSide` → `DoubleSide`** (`src/sky/skySphere.ts`): `buildSkyGeometry` mirrors u
+  for the inside-view RA convention, so its triangle winding made `BackSide` cull the *base sky*
+  from the sphere centre — the cause of the missing half-sky / missing Milky Way. `DoubleSide` is
+  winding-agnostic (same choice already proven on the HiPS tile meshes); full 360° base imagery
+  and the Mellinger Milky Way are back.
+- **`hips.clear()` was mis-attached to the auto-survey `if`** (`src/main.ts`): in Pro mode (where
+  auto-survey is off) the `else` branch ran every frame and wiped the HiPS layer — the reason
+  survey switching and zoomed tile streaming looked completely dead. Re-bound so tiles are only
+  dropped on leaving Earth view (`else if (hips.tileCount)`); a comment at the call site records
+  the trap.
+- **Star-Walk-smooth gyro** (`src/core/deviceSky.ts`): sensor events now only write a *target*
+  direction; the render loop eases the displayed direction toward it with a dt-corrected
+  exponential filter, `alpha = 1 − exp(−dt/τ)` (τ ≈ 0.12 s gyro-only, 0.3 s compass-fused —
+  compass heading jitters more, smooth harder). Easing the 3-D look **vector** (normalized lerp)
+  instead of scalar yaw/pitch avoids the yaw ±π wraparound glitch. The compass is never used
+  directly for azimuth: it estimates a slowly-corrected constant north offset for the (continuous)
+  gyro frame, sampled only in poses where the heading is meaningful.
+
+## 2026-06-13 — Zero-overlap app-frame redesign
+
+- **One CSS app-frame, no floating HUDs:** top bar (brand + search + help + about + PRO toggle),
+  accordion left dock (Imagery / Overlays / Live alerts / Tools — one section open at a time),
+  docked right detail panel, time bar, and a one-line bottom status. Nothing overlaps anything at
+  any width; on phones the dock collapses into a ☰ drawer. Pro ⇄ Public share the same shell
+  (`.pro-only` hides sections rather than re-laying-out).
+- **Reticle on every popup cutout:** the small circle marking "the object is HERE" now draws on
+  every image we pop up — object panel cutout, transient field, the science/template/difference
+  triptych stamps, and the FITS canvas — so no popup leaves the user hunting for the target.
+
+## 2026-06-13 — FITS quantitative mode: manual DataView parse, no library
+
+- **Parse hips2fits `format=fits` ourselves** (`src/data/fits.ts`, rendered by
+  `src/ui/fitsView.ts`) rather than pull in a FITS library: the need is narrow (single-HDU images
+  from one known producer) and a `DataView` reader covering BITPIX 8/16/32/−32/−64 with
+  BZERO/BSCALE, NaN and BLANK handling is small, dependency-free and fully testable. References
+  in-file: FITS 4.0 standard, Greisen & Calabretta 2002 for the gnomonic **TAN WCS**
+  (pixel → RA/Dec, drives the hover per-pixel physical-value readout).
+- **IRAF zscale display limits by default** (robust line fit over sorted samples → contrast-
+  limited z1/z2 — the astronomer's expected default), stretches linear/log/√/**asinh** with asinh
+  as the default (usable on both faint structure and bright cores).
+
+## 2026-06-13 — Solar system + time machine
+
+- **Ephemeris = JPL approximate Keplerian elements (valid 1800–2050) + truncated lunar theory**
+  (`src/data/ephemeris.ts`): planets heliocentric J2000 ecliptic → geocentric → J2000 equatorial,
+  arcminute-class accuracy; Moon ~1–2 arcmin. The lunar/solar theory natively yields
+  ecliptic-of-date, so longitudes are precessed by −50.29″/yr to J2000 before converting with
+  ε(J2000) — everything shares the app's ICRS/J2000 frame by construction. Moon gets topocentric
+  parallax when an observer location is set; magnitudes are approximate (Müller/Meeus) and
+  labelled approximate in the panel.
+- **Validated against two hard historical anchors** (in the 8 ephemeris unit tests): the
+  2020-12-21 Jupiter–Saturn great conjunction and the 2017-08-21 total solar eclipse — the latter
+  both geocentric and topocentric from a point on the totality path. If those reproduce, the
+  pipeline (elements, lunar theory, precession, parallax) is wired right.
+- **Moon phase is drawn correctly:** illuminated fraction from Sun–Moon geometry, bright limb
+  oriented toward the Sun.
+- **Sim clock rebasing model** (`src/core/simTime.ts`): `sim(t) = baseSim + (realNow − baseReal) ·
+  rate`, re-based on every rate/time change so there is no drift; rate 0 = paused, negative =
+  backwards, ±1 s/s to ±1 yr/s from the time bar (−1d/+1d steps, click-date entry, ● Now, amber
+  when warped). The whole solar-system/observability/horizon-grid pipeline reads this clock, not
+  `Date.now()` — observability (alt/az/airmass, rise/transit/set, tonight curve) follows the
+  warped time for free.
+
+## 2026-06-13 — Stellarium-parity sweep
+
+- **Messier fetched from SIMBAD TAP at build time** (`tools/build-messier.mjs` →
+  `public/data/messier.json`), not hand-typed: 110 positions/types from the authoritative source,
+  regenerable, and immune to transcription errors. Clickable labels with zoom decluttering.
+- **IAU constellation boundaries** from d3-celestial GeoJSON (BSD-3, Olaf Frohn) — same vendored
+  source as the stick figures, so the two stay mutually consistent.
+- **Horizon (alt/az) grid rebuilt ~1 Hz** (`src/sky/grids.ts`): it depends on observer + sim
+  time, so it cannot be static geometry like the equatorial grid; 1 Hz tracks even fast time-warp
+  without per-frame rebuild cost. Precession circles added alongside the ecliptic.
+- **📐 measure tool:** two-click great-circle separation in °/′/″ with a drawn arc, chainable —
+  the missing quantitative companion to the FOV framing circle (5°→5′, true angular size).
+- **Hotkeys + ⌘K:** single-key toggles (C/B/L/M/G/E/H/P/T/F, [ ] ±1 day, N now, / search, ? help)
+  and a ⌘K/Ctrl-K command palette that lists commands and falls through to sky search.
+- **ANTARES Streams dropdown** via `fetchByTag` (`src/data/transients.ts`): the broker's tag
+  search is POST/ElasticSearch-DSL, so 12 community tags (e.g. `nuclear_transient`, anomaly
+  detectors, `sso_confirmed`) are queried with a small DSL body — the follow-up deferred on
+  2026-06-12 is done.
+
+## 2026-06-13 — Good-neighbour hardening + CI gating
+
+- **`politeFetch`** (`src/data/transients.ts`): on 429/503 it backs off exponentially,
+  **honouring a `Retry-After` header when present**, max 3 tries, then degrades gracefully to the
+  snapshot baseline instead of retry-storming the broker. Sits under the existing client rate
+  limiters (CDS ≈4/s, brokers 3/s) and cone cache.
+- **Hidden tabs stop polling** (`visibilitychange` in `src/main.ts`): live alert polling pauses
+  when the tab is hidden and fires an instant catch-up fetch on return — no background traffic,
+  no stale view on refocus. HiPS stays hotlinked + browser-cached, never mirrored.
+- **CI: Pages deploy is manual-dispatch-only.** "CI / Deploy" runs typecheck + tests + build on
+  every push (green), but the deploy job only runs on `workflow_dispatch` — Pages isn't enabled
+  yet, and gating it keeps pushes green instead of failing on a deploy step that can't succeed.

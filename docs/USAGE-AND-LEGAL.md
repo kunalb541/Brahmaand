@@ -48,7 +48,12 @@ Ship these (the About panel does; repeat them in any paper/product built on the 
   - unWISE — NASA / WISE; Mellinger — © A. Mellinger (**non-commercial**).
 - **Catalogues / object data:** "CDS/SIMBAD", "CDS/VizieR" (DOI 10.26093/cds/vizier); Gaia DR3 —
   "ESA/Gaia/DPAC, CC BY-SA 3.0 IGO"; distances — Bailer-Jones et al. 2021; bright stars/names —
-  HYG / ATHYG (CC BY-SA 4.0).
+  HYG / ATHYG (CC BY-SA 4.0). The bundled Messier catalogue (`public/data/messier.json`,
+  positions/types) is built from **SIMBAD** — "This research has made use of the SIMBAD database,
+  operated at CDS, Strasbourg, France."
+- **Solar system:** Sun, Moon, and planet positions are computed **on-device** from published
+  algorithms (JPL approximate planetary elements; a truncated lunar theory) — no external
+  ephemeris service is called.
 - **Alerts:** "ALeRCE broker" (default — **ZTF** alert stream + `lc_classifier` ML classes) and
   "ANTARES broker, NOIRLab" (the **Vera C. Rubin Observatory / LSST** + ZTF streams + community
   filters), selectable in-app. Credit the underlying surveys (ZTF; Rubin/LSST) and the broker in use.

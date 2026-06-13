@@ -1,3 +1,12 @@
+> **SUPERSEDED (2026-06-13).** This document is the 2026-06-12 session handoff, kept as a historical
+> record. Everything in its "Open" list has since shipped — the rendering bugs are fixed, the
+> zero-overlap redesign landed, FITS quantitative mode is wired into the UI, the alert feed /
+> triptych / light curve are live, and phone motion is smooth — along with later work (solar system
+> + time machine, observability, grids, Messier, measure tool, ⌘K palette, ANTARES Streams
+> explorer). For the current plan see [ACTION-PLAN.md](ACTION-PLAN.md); for the feature-by-feature
+> comparison with Stellarium see [STELLARIUM-PARITY.md](STELLARIUM-PARITY.md). The content below is
+> unchanged.
+
 # Brahmaand — Professional roadmap, redesign spec & handoff
 
 *Written 2026-06-12. Distilled from the 6-agent research workflow (full raw findings:

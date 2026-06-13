@@ -1,0 +1,6 @@
+# graphify: index the app source + build tools only (code-only = offline, no API key)
+*
+!src/
+!src/**
+!tools/
+!tools/**
