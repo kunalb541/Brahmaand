@@ -100,6 +100,21 @@
       #rightpanel.open { display: block; }
 
       /* ---- Bottom status bar: ONE flex line; sections shrink with ellipsis, never stack ---- */
+      /* time machine bar — its own frame row, so it can never overlap other UI */
+      #timebar {
+        display: flex; gap: 6px; align-items: center; justify-content: center; flex-wrap: wrap;
+        padding: 3px 10px; background: rgba(6, 12, 24, 0.78);
+        border-top: 1px solid rgba(120, 170, 255, 0.12);
+        font: 11px ui-monospace, "SF Mono", Menlo, monospace; color: #9cc4ff;
+      }
+      #timebar button {
+        font: inherit; font-size: 11px; cursor: pointer; color: #dcebff;
+        background: rgba(40, 70, 130, 0.45); border: 1px solid rgba(120, 170, 255, 0.3);
+        border-radius: 6px; padding: 2px 8px;
+      }
+      #timebar button.active { background: rgba(90, 140, 230, 0.7); border-color: #9cc4ff; }
+      #time-display { min-width: 168px; text-align: center; color: #cfe3ff; cursor: pointer; }
+      #timebar.warped #time-display { color: #e8c66a; } /* amber = not real time */
       #bottombar {
         pointer-events: auto;
         display: flex; align-items: center; gap: 12px;
@@ -189,6 +204,16 @@
         </aside>
         <div id="skyspace"></div>
         <aside id="rightpanel"></aside>
+      </div>
+      <div id="timebar">
+        <button id="t-back1d" title="back one day">−1d</button>
+        <button id="t-slower" title="slower / reverse">◀◀</button>
+        <button id="t-pause" title="pause / resume">⏸</button>
+        <button id="t-faster" title="faster forward">▶▶</button>
+        <button id="t-fwd1d" title="forward one day">+1d</button>
+        <span id="time-display" title="click to enter a date &amp; time">—</span>
+        <span id="time-rate"></span>
+        <button id="t-now" title="return to real time">● Now</button>
       </div>
       <footer id="bottombar">
         <span id="readout">RA --h --m&nbsp;&nbsp;Dec ±--° --′</span>

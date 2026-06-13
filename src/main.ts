@@ -8,6 +8,9 @@ import { createSkySphere } from './sky/skySphere';
 import { HipsLayer } from './sky/hips/hipsLayer';
 import { createConstellationLines } from './sky/constellations';
 import { createEquatorialGrid, createEquator, createEcliptic, createGalacticEquator } from './sky/grids';
+import { SolarSystemLayer } from './sky/solarSystem';
+import { solarSystemAt } from './data/ephemeris';
+import { getSimMs, getRate, setRate, setSimMs, resetToNow, isLive } from './core/simTime';
 import { StarLabels } from './sky/starLabels';
 import { StarField } from './stars/starField';
 import { TransientLayer } from './sky/transientLayer';
@@ -157,6 +160,53 @@ const wireGrid = (id: string, key: keyof typeof gridOn) => {
 wireGrid('toggle-grid', 'equ');
 wireGrid('toggle-ecliptic', 'ecl');
 wireGrid('toggle-galactic', 'gal');
+
+// --- Solar system (Sun, Moon with phase, planets) + the time machine ---
+const solar = new SolarSystemLayer(scene);
+let solarOn = true;
+{
+  const row = document.createElement('div');
+  row.className = 'row';
+  row.innerHTML = '<button id="toggle-solar" class="active" title="Sun, Moon (with phase) and planets at their real ephemeris positions">Planets</button>';
+  document.getElementById('sec-overlays')!.appendChild(row);
+  document.getElementById('toggle-solar')!.addEventListener('click', (e) => {
+    solarOn = (e.currentTarget as HTMLButtonElement).classList.toggle('active');
+  });
+}
+
+// time-machine bar: rate steps (negative = backwards), date jump, return-to-now
+const RATE_STEPS = [-31536000, -2592000, -86400, -3600, -60, -1, 0, 1, 60, 3600, 86400, 2592000, 31536000];
+const rateLabel = (r: number): string =>
+  r === 0 ? '⏸ paused' :
+  Math.abs(r) === 1 ? (r > 0 ? '× real time' : '× −real time') :
+  Math.abs(r) === 60 ? `× ${r > 0 ? '' : '−'}1 min/s` :
+  Math.abs(r) === 3600 ? `× ${r > 0 ? '' : '−'}1 h/s` :
+  Math.abs(r) === 86400 ? `× ${r > 0 ? '' : '−'}1 day/s` :
+  Math.abs(r) === 2592000 ? `× ${r > 0 ? '' : '−'}1 mo/s` : `× ${r > 0 ? '' : '−'}1 yr/s`;
+const timebar = document.getElementById('timebar')!;
+const timeDisplay = document.getElementById('time-display')!;
+const timeRate = document.getElementById('time-rate')!;
+const stepRate = (dir: 1 | -1): void => {
+  const i = RATE_STEPS.indexOf(getRate());
+  const j = Math.min(RATE_STEPS.length - 1, Math.max(0, (i < 0 ? RATE_STEPS.indexOf(1) : i) + dir));
+  setRate(RATE_STEPS[j]!);
+};
+document.getElementById('t-slower')!.addEventListener('click', () => stepRate(-1));
+document.getElementById('t-faster')!.addEventListener('click', () => stepRate(1));
+document.getElementById('t-pause')!.addEventListener('click', () => setRate(getRate() === 0 ? 1 : 0));
+document.getElementById('t-back1d')!.addEventListener('click', () => setSimMs(getSimMs() - 86400000));
+document.getElementById('t-fwd1d')!.addEventListener('click', () => setSimMs(getSimMs() + 86400000));
+document.getElementById('t-now')!.addEventListener('click', resetToNow);
+timeDisplay.addEventListener('click', () => {
+  const cur = new Date(getSimMs());
+  const pad = (n: number): string => String(n).padStart(2, '0');
+  const local = `${cur.getFullYear()}-${pad(cur.getMonth() + 1)}-${pad(cur.getDate())}T${pad(cur.getHours())}:${pad(cur.getMinutes())}`;
+  const v = prompt('Set date & time (local, YYYY-MM-DDTHH:MM):', local);
+  if (v) {
+    const ms = new Date(v).getTime();
+    if (isFinite(ms)) setSimMs(ms);
+  }
+});
 
 // --- 3D star field + fly controls ---
 // Gaia DR3 (638k) is the deep field; HYG patches the very brightest naked-eye stars that
@@ -560,8 +610,15 @@ canvas.addEventListener('pointerup', (e) => {
   pickSkyDirection(clickNdc);
 });
 
-/** Shared by mouse-click and the XR trigger: a transient marker wins, else SIMBAD identify. */
+/** Shared by mouse-click and the XR trigger: solar-system body, then transient, else SIMBAD. */
 function pickSkyDirection(dir: THREE.Vector3): void {
+  if (solarOn) {
+    const body = solar.pick(dir, Math.max(0.7, controls.fovDeg / 30));
+    if (body) {
+      objectPanel.showSolarBody(body);
+      return;
+    }
+  }
   if (transientsOn && transientLayer.count) {
     const hit = transientLayer.pickNearest(dir, 0.6);
     if (hit) {
@@ -765,6 +822,21 @@ startLoop(renderer, (dt) => {
     equGrid.visible = equator.visible = gridOn.equ;
     ecliptic.visible = gridOn.ecl;
     galactic.visible = gridOn.gal;
+
+    // solar system: ephemerides at sim-time (10 Hz is plenty — bodies move slowly on screen),
+    // sized true-to-angular-diameter, Moon limb turned toward the Sun
+    solar.setCenter(rig.position);
+    solar.setVisible(solarOn && nearEarth);
+    if (hudTick && solarOn && nearEarth) {
+      solar.update(solarSystemAt(getSimMs()), controls.fovDeg, canvas.clientHeight, camera);
+    }
+    // the clock display ticks regardless of the Planets toggle / Earth-vs-space view
+    if (hudTick) {
+      const live = isLive();
+      timebar.classList.toggle('warped', !live);
+      timeDisplay.textContent = new Date(getSimMs()).toLocaleString([], { dateStyle: 'medium', timeStyle: 'medium' });
+      timeRate.textContent = rateLabel(getRate());
+    }
 
     // FOV framing circle: pixel diameter = (target° / vertical-FOV°) × viewport height
     if (fovIdx >= 0 && nearEarth) {

@@ -36,6 +36,8 @@ import {
   nightWindow,
   altitudeCurve,
 } from '../data/observability';
+import { getSimMs } from '../core/simTime';
+import type { BodyEphemeris } from '../data/ephemeris';
 
 interface PanelOpts {
   flyTo: (raDeg: number, decDeg: number, extended: boolean) => void;
@@ -127,7 +129,7 @@ export class ObjectPanel {
           `<button data-obs-act="setloc" style="${btn}">✎ Enter manually</button></div>`,
       );
     }
-    const now = Date.now();
+    const now = getSimMs(); // follows the time machine, so planning matches the displayed sky
     const h = equatorialToHorizontal(raDeg, decDeg, loc, now);
     const X = airmass(h.altDeg);
     const rts = riseTransitSet(raDeg, decDeg, loc, now);
@@ -351,6 +353,37 @@ export class ObjectPanel {
       btn.textContent = '▦ hide FITS';
     });
     this.panel.appendChild(btn);
+  }
+
+  /** Render a solar-system body (Sun/Moon/planet) from the on-device ephemeris. */
+  showSolarBody(b: BodyEphemeris): void {
+    this.abort?.abort();
+    const fmtDist =
+      b.id === 'moon'
+        ? `${Math.round(b.distKm).toLocaleString()} km${b.topocentric ? ' (topocentric)' : ' (geocentric)'}`
+        : `${b.distAU.toFixed(3)} AU (${(b.distKm / 1e6).toFixed(1)} M km)`;
+    const ang =
+      b.angDiamDeg >= 1 / 60
+        ? `${(b.angDiamDeg * 60).toFixed(1)}′`
+        : `${(b.angDiamDeg * 3600).toFixed(1)}″`;
+    const showPhase = b.id === 'moon' || b.id === 'mercury' || b.id === 'venus' || b.id === 'mars';
+    const rows =
+      `<div style="display:flex;align-items:baseline;gap:8px"><b style="font-size:15px;color:#eaf3ff">${b.name}</b>` +
+      `<span style="font-size:10px;color:#7f93b5">solar system</span></div>` +
+      `<div style="margin-top:6px;color:#bcd">${formatRaHms(b.raDeg)}&nbsp;&nbsp;${formatDecDms(b.decDeg)}</div>` +
+      `<div style="margin-top:6px;font-size:11px;line-height:1.6">` +
+      `<div>distance: ${fmtDist}</div>` +
+      `<div>angular diameter: ${ang}</div>` +
+      (b.magV != null ? `<div>magnitude: ${b.magV.toFixed(1)} <span style="color:#7f93b5">(approx.)</span></div>` : '') +
+      (showPhase
+        ? `<div>illuminated: ${(b.illum * 100).toFixed(0)}% · phase angle ${b.phaseAngleDeg.toFixed(0)}°</div>`
+        : '') +
+      `</div>` +
+      this.obsBlock(b.raDeg, b.decDeg) +
+      `<div style="margin-top:8px;color:#5f7494;font-size:10px;border-top:1px solid rgba(120,170,255,.12);padding-top:6px">` +
+      `Ephemeris: JPL approximate elements / truncated lunar theory — display-grade (≈ arcminutes), not for precise work</div>`;
+    this.rerender = () => this.showSolarBody(b);
+    this.show(rows);
   }
 
   /** Render a live transient: classification, recency, light-curve sparkline, field cutout. */
