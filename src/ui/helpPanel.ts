@@ -35,6 +35,9 @@ export function initHelpPanel(): void {
     `<p style="${S.p}"><b>📱 Move-to-look:</b> tap the button at the bottom of the sky, allow motion (and location), ` +
     `then just move your phone — the view follows. With GPS + compass it becomes <b>📡 Sky-locked</b>: the app shows ` +
     `the real stars in the direction you're pointing, north or south. Fly back home anytime with ⌂ Return to Earth.</p>` +
+    `<p style="${S.p}">Motion is smoothed like Star Walk (adaptive filter + quaternion slerp + jitter rejection). ` +
+    `Use the <b>🪶 Smooth / 🎯 Accurate</b> pill to trade stability for responsiveness; <b>long-press</b> it for a ` +
+    `calibration overlay (raw vs. filtered orientation, update rate, GPS/compass lock).</p>` +
 
     `<div style="${S.h}">Keyboard shortcuts</div>` +
     `<p style="${S.p}"><span style="${S.k}">⌘K</span>/<span style="${S.k}">Ctrl-K</span> command palette · ` +

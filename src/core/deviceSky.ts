@@ -34,11 +34,20 @@ import { raDecToWorld } from '../math/frames';
 const AZ_SIGN = 1; // flip to -1 if the view turns the wrong way horizontally
 const AZ_OFFSET_DEG = 0; // add a constant if north is consistently off by a fixed angle
 
-// --- smoothing time constants (seconds) ---
-const TAU_RELATIVE = 0.12; // gyro-only: tight tracking, kills sensor jitter
-const TAU_ABSOLUTE = 0.3; // compass-fused: heading jitters more → smooth harder
+// --- smoothing presets (1-Euro-style adaptive filter) ---
+// fcMin = cutoff (Hz) when the phone is still → low = heavy smoothing, kills jitter.
+// beta  = how fast the cutoff rises with angular speed → responsiveness when you actually move.
+// deadbandDeg = ignore target changes below this when nearly still → no micro-vibration at rest.
+// compassLp = low-pass weight for the gyro→north offset (smaller = steadier heading).
+export type SmoothMode = 'smooth' | 'accurate';
+const PRESETS: Record<SmoothMode, { fcMin: number; beta: number; deadbandDeg: number; compassLp: number }> = {
+  smooth: { fcMin: 0.6, beta: 4, deadbandDeg: 0.25, compassLp: 0.03 }, // public default — stable
+  accurate: { fcMin: 1.6, beta: 8, deadbandDeg: 0.08, compassLp: 0.06 }, // pro — snappier
+};
 
 const DEG2RAD = Math.PI / 180;
+const RAD2DEG = 180 / Math.PI;
+const TAU = Math.PI * 2;
 
 const zee = new THREE.Vector3(0, 0, 1);
 const euler = new THREE.Euler();
@@ -46,8 +55,14 @@ const q0 = new THREE.Quaternion();
 const q1 = new THREE.Quaternion(-Math.sqrt(0.5), 0, 0, Math.sqrt(0.5)); // -90° about X: look out the back
 const quat = new THREE.Quaternion();
 const look = new THREE.Vector3();
+const look2 = new THREE.Vector3();
 const top = new THREE.Vector3();
 const worldDir = new THREE.Vector3();
+
+/** Build a roll-free camera orientation quaternion that looks along (yaw,pitch). */
+function quatFromYawPitch(yaw: number, pitch: number, out: THREE.Quaternion): void {
+  out.setFromEuler(euler.set(pitch, yaw, 0, 'YXZ'));
+}
 
 function deviceQuaternion(alpha: number, beta: number, gamma: number, orient: number): THREE.Quaternion {
   euler.set(beta, alpha, -gamma, 'YXZ');
@@ -106,13 +121,55 @@ export class DeviceSky {
   private compassOffset = 0;
   private hasOffset = false;
 
-  // smoothing state: sensor events write `targetDir`; update(dt) eases `smoothDir` toward it.
+  // smoothing state: sensor events write `targetDir`; update(dt) slerps the camera toward it.
   private readonly targetDir = new THREE.Vector3(0, 0, -1);
-  private readonly smoothDir = new THREE.Vector3(0, 0, -1);
+  private readonly targetQuat = new THREE.Quaternion();
+  private readonly smoothQuat = new THREE.Quaternion();
   private hasTarget = false;
   private hasSmooth = false;
 
+  /** Smoothing preset — 'smooth' (default, public) or 'accurate' (pro, snappier). */
+  mode: SmoothMode = 'smooth';
+  /** When true, getStats() returns live numbers for the calibration overlay. */
+  debug = false;
+
+  // --- debug/telemetry (for the calibration overlay) ---
+  private rawA = 0;
+  private rawB = 0;
+  private rawG = 0;
+  private headingDeg: number | null = null;
+  private hz = 0;
+  private lastEvtMs = 0;
+
   constructor(private controls: LookControls) {}
+
+  setMode(m: SmoothMode): void {
+    this.mode = m;
+  }
+
+  /** Live filter/sensor telemetry for the calibration overlay. */
+  getStats(): {
+    mode: SmoothMode;
+    absolute: boolean;
+    hz: number;
+    rawDeg: { alpha: number; beta: number; gamma: number };
+    heading: number | null;
+    gps: boolean;
+    yawDeg: number;
+    pitchDeg: number;
+  } {
+    look2.set(0, 0, -1).applyQuaternion(this.smoothQuat);
+    return {
+      mode: this.mode,
+      absolute: this.absolute,
+      hz: this.hz,
+      rawDeg: { alpha: this.rawA, beta: this.rawB, gamma: this.rawG },
+      heading: this.headingDeg,
+      gps: this.latRad != null,
+      yawDeg: Math.atan2(-look2.x, -look2.z) * RAD2DEG,
+      pitchDeg: Math.asin(THREE.MathUtils.clamp(look2.y, -1, 1)) * RAD2DEG,
+    };
+  }
 
   /** Must be called from a user gesture (iOS requires a motion permission prompt). */
   async enable(): Promise<boolean> {
@@ -176,22 +233,49 @@ export class DeviceSky {
    * (BEFORE controls.update) with the frame delta-time in seconds.
    */
   update(dt: number): void {
-    if (!this.enabled || !this.hasTarget) return;
+    if (!this.enabled || !this.hasTarget || dt <= 0) return;
+
+    // target as a roll-free orientation quaternion (camera is yaw/pitch only)
+    const tPitch = Math.asin(THREE.MathUtils.clamp(this.targetDir.y, -1, 1));
+    const tYaw = Math.atan2(-this.targetDir.x, -this.targetDir.z);
+    quatFromYawPitch(tYaw, tPitch, this.targetQuat);
+
     if (!this.hasSmooth) {
-      this.smoothDir.copy(this.targetDir);
+      this.smoothQuat.copy(this.targetQuat); // snap to first fix — no whip-pan
       this.hasSmooth = true;
     } else {
-      const tau = this.absolute ? TAU_ABSOLUTE : TAU_RELATIVE;
-      const alpha = 1 - Math.exp(-dt / tau); // dt-corrected: identical feel at any frame rate
-      this.smoothDir.lerp(this.targetDir, alpha).normalize();
+      const cfg = PRESETS[this.mode];
+      const ang = this.smoothQuat.angleTo(this.targetQuat); // radians of remaining motion
+      // Jitter rejection: when essentially still, hold rock-steady (kills micro-vibration).
+      if (ang > cfg.deadbandDeg * DEG2RAD) {
+        // 1-Euro-style adaptive cutoff: smooth when slow, responsive when fast.
+        const speed = ang / dt; // rad/s — how fast the target is moving right now
+        const fc = cfg.fcMin + cfg.beta * speed; // Hz
+        const tau = 1 / (TAU * fc); // filter time constant
+        const alpha = THREE.MathUtils.clamp(dt / (tau + dt), 0, 1); // dt-corrected
+        this.smoothQuat.slerp(this.targetQuat, alpha); // true shortest-path interpolation
+      }
     }
-    const pitch = Math.asin(THREE.MathUtils.clamp(this.smoothDir.y, -1, 1));
-    const yaw = Math.atan2(-this.smoothDir.x, -this.smoothDir.z);
+    // drive the camera from the smoothed orientation
+    look2.set(0, 0, -1).applyQuaternion(this.smoothQuat);
+    const pitch = Math.asin(THREE.MathUtils.clamp(look2.y, -1, 1));
+    const yaw = Math.atan2(-look2.x, -look2.z);
     this.controls.setYawPitch(yaw, pitch);
   }
 
   private onOrientation(e: DeviceOrientationEvent): void {
     if (e.alpha == null || e.beta == null || e.gamma == null) return;
+    // telemetry: raw angles + measured event rate (sensor events arrive irregularly)
+    this.rawA = e.alpha;
+    this.rawB = e.beta;
+    this.rawG = e.gamma;
+    const nowMs = Date.now();
+    if (this.lastEvtMs) {
+      const inst = 1000 / Math.max(1, nowMs - this.lastEvtMs);
+      this.hz = this.hz ? this.hz * 0.9 + inst * 0.1 : inst; // smoothed Hz
+    }
+    this.lastEvtMs = nowMs;
+
     const orient = ((screen.orientation?.angle ?? (window as unknown as { orientation?: number }).orientation ?? 0) *
       Math.PI) /
       180;
@@ -212,6 +296,7 @@ export class DeviceSky {
     } else if (ev.absolute) {
       headingDeg = (360 - e.alpha) % 360;
     }
+    this.headingDeg = headingDeg;
 
     // Update the gyro→north offset only while the device TOP is far enough from vertical for
     // its horizontal compass projection to mean something (|top.y| < 0.7 ≈ tilted < 45°).
@@ -220,7 +305,7 @@ export class DeviceSky {
       const headingRad = (AZ_SIGN * headingDeg + AZ_OFFSET_DEG) * DEG2RAD;
       let d = headingRad - azTopGyro - this.compassOffset;
       d = Math.atan2(Math.sin(d), Math.cos(d)); // wrap to ±π
-      this.compassOffset += (this.hasOffset ? 0.05 : 1) * d; // snap first sample, then low-pass
+      this.compassOffset += (this.hasOffset ? PRESETS[this.mode].compassLp : 1) * d; // snap first, then low-pass
       this.hasOffset = true;
     }
 
