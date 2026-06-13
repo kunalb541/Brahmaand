@@ -38,6 +38,9 @@ export function initHelpPanel(): void {
     `<p style="${S.p}">Motion is smoothed like Star Walk (adaptive filter + quaternion slerp + jitter rejection). ` +
     `Use the <b>🪶 Smooth / 🎯 Accurate</b> pill to trade stability for responsiveness; <b>long-press</b> it for a ` +
     `calibration overlay (raw vs. filtered orientation, update rate, GPS/compass lock).</p>` +
+    `<p style="${S.p}"><b>Pointing off?</b> Phone compasses are unreliable and vary by model, so when it's ` +
+    `<b>📡 Sky-locked</b> you can <b>drag the sky to align it</b> with what you actually see — point at a known ` +
+    `bright star or the Moon and drag until they match. The alignment is saved; <b>⟲ reset align</b> clears it.</p>` +
 
     `<div style="${S.h}">Keyboard shortcuts</div>` +
     `<p style="${S.p}"><span style="${S.k}">⌘K</span>/<span style="${S.k}">Ctrl-K</span> command palette · ` +

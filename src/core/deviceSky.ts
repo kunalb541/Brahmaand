@@ -121,6 +121,12 @@ export class DeviceSky {
   private compassOffset = 0;
   private hasOffset = false;
 
+  // User manual sky-alignment (radians), persisted. Device compasses are unreliable and vary by
+  // model, so — like SkySafari / Stellarium Mobile — the user can DRAG the sky into alignment once
+  // and it sticks. Added on top of the compass-derived offset in ABSOLUTE mode.
+  private azOffsetUser = 0;
+  private altOffsetUser = 0;
+
   // smoothing state: sensor events write `targetDir`; update(dt) slerps the camera toward it.
   private readonly targetDir = new THREE.Vector3(0, 0, -1);
   private readonly targetQuat = new THREE.Quaternion();
@@ -141,10 +147,48 @@ export class DeviceSky {
   private hz = 0;
   private lastEvtMs = 0;
 
-  constructor(private controls: LookControls) {}
+  constructor(private controls: LookControls) {
+    try {
+      const s = localStorage.getItem('brahmaand.skycal');
+      if (s) {
+        const c = JSON.parse(s) as { az?: number; alt?: number };
+        this.azOffsetUser = c.az ?? 0;
+        this.altOffsetUser = c.alt ?? 0;
+      }
+    } catch {
+      /* ignore */
+    }
+  }
 
   setMode(m: SmoothMode): void {
     this.mode = m;
+  }
+
+  /** Manual sky alignment: nudge the registration by (Δaz, Δalt) radians and persist it. */
+  nudgeCal(dAz: number, dAlt: number): void {
+    this.azOffsetUser += dAz;
+    this.altOffsetUser = THREE.MathUtils.clamp(this.altOffsetUser + dAlt, -0.8, 0.8);
+    try {
+      localStorage.setItem('brahmaand.skycal', JSON.stringify({ az: this.azOffsetUser, alt: this.altOffsetUser }));
+    } catch {
+      /* ignore */
+    }
+  }
+
+  /** Clear the manual alignment (back to the compass-derived registration). */
+  resetCal(): void {
+    this.azOffsetUser = 0;
+    this.altOffsetUser = 0;
+    try {
+      localStorage.removeItem('brahmaand.skycal');
+    } catch {
+      /* ignore */
+    }
+  }
+
+  /** True when manual alignment is active (non-zero), for the UI. */
+  get calibrated(): boolean {
+    return this.azOffsetUser !== 0 || this.altOffsetUser !== 0;
   }
 
   /** Live filter/sensor telemetry for the calibration overlay. */
@@ -313,8 +357,12 @@ export class DeviceSky {
       // ABSOLUTE: altitude AND azimuth both from the continuous gyro quaternion (so a full
       // 360° sweep and tilting through the zenith track correctly); the compass only anchors
       // the frame to true north via the low-passed offset above. → real RA/Dec.
-      const alt = Math.asin(THREE.MathUtils.clamp(look.y, -1, 1));
-      const az = azLookGyro + this.compassOffset;
+      const alt = THREE.MathUtils.clamp(
+        Math.asin(THREE.MathUtils.clamp(look.y, -1, 1)) + this.altOffsetUser,
+        -Math.PI / 2,
+        Math.PI / 2,
+      );
+      const az = azLookGyro + this.compassOffset + this.azOffsetUser;
       const { ra, dec } = altAzToRaDec(alt, az, this.latRad, lstRad(Date.now(), this.lonRad));
       raDecToWorld(ra, dec, worldDir);
       this.targetDir.copy(worldDir);

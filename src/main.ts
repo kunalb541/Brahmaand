@@ -422,12 +422,21 @@ if (isTouch) {
     'font:12px ui-monospace,monospace;color:#dcebff;background:rgba(40,70,130,.6);border:1px solid rgba(120,170,255,.4);' +
     'border-radius:18px;padding:7px 14px';
   document.getElementById('skyspace')!.appendChild(gyroBtn);
+  // reset-alignment chip (only while a manual sky alignment is in effect)
+  const resetCalBtn = document.createElement('button');
+  resetCalBtn.textContent = '⟲ reset align';
+  resetCalBtn.style.cssText =
+    'position:absolute;left:50%;transform:translateX(-50%);bottom:78px;display:none;' +
+    'font:10px ui-monospace,monospace;color:#dcebff;background:rgba(40,70,130,.5);border:1px solid rgba(120,170,255,.3);border-radius:12px;padding:3px 10px';
+  document.getElementById('skyspace')!.appendChild(resetCalBtn);
+  resetCalBtn.addEventListener('click', () => deviceSky.resetCal());
   let gyroPoll: ReturnType<typeof setInterval> | null = null;
   gyroBtn.addEventListener('click', async () => {
     if (deviceSky.enabled) {
       deviceSky.disable();
       gyroBtn.style.background = 'rgba(40,70,130,.6)';
       gyroBtn.textContent = '📱 Move-to-look';
+      resetCalBtn.style.display = 'none';
       if (gyroPoll) {
         clearInterval(gyroPoll);
         gyroPoll = null;
@@ -436,7 +445,12 @@ if (isTouch) {
       gyroBtn.style.background = 'rgba(90,140,230,.85)';
       // reflect whether a real-sky (GPS+compass) lock came through, or relative-only
       gyroPoll = setInterval(() => {
-        gyroBtn.textContent = deviceSky.absolute ? '📡 Sky-locked (GPS)' : '📱 Move-to-look';
+        gyroBtn.textContent = deviceSky.absolute
+          ? deviceSky.calibrated
+            ? '📡 Sky-locked ✓'
+            : '📡 drag sky to align'
+          : '📱 Move-to-look';
+        resetCalBtn.style.display = deviceSky.absolute && deviceSky.calibrated ? 'block' : 'none';
       }, 1000);
     } else {
       gyroBtn.textContent = '📱 motion blocked';
@@ -812,11 +826,31 @@ const autoRd = { raRad: 0, decRad: 0 }; // public auto-survey view direction
 let downX = 0;
 let downY = 0;
 let downT = 0;
+// Manual sky-alignment: while phone sky-lock is active, dragging the sky NUDGES the registration
+// (device compasses are unreliable; align once, it persists) instead of doing nothing.
+let calDragX = 0;
+let calDragY = 0;
+let calDragging = false;
 canvas.addEventListener('pointerdown', (e) => {
   downX = e.clientX;
   downY = e.clientY;
   downT = performance.now();
+  if (deviceSky.enabled && deviceSky.absolute) {
+    calDragging = true;
+    calDragX = e.clientX;
+    calDragY = e.clientY;
+  }
 });
+canvas.addEventListener('pointermove', (e) => {
+  if (!calDragging) return;
+  const radPerPx = (controls.fovDeg * DEG2RAD) / Math.max(1, window.innerHeight);
+  deviceSky.nudgeCal(-(e.clientX - calDragX) * radPerPx, (e.clientY - calDragY) * radPerPx);
+  calDragX = e.clientX;
+  calDragY = e.clientY;
+});
+const endCalDrag = () => (calDragging = false);
+canvas.addEventListener('pointerup', endCalDrag);
+canvas.addEventListener('pointercancel', endCalDrag);
 canvas.addEventListener('pointerup', (e) => {
   // distinguish a click from a drag-look (small movement, short dwell)
   if (Math.hypot(e.clientX - downX, e.clientY - downY) > 6 || performance.now() - downT > 500) return;
