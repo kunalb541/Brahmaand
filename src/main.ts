@@ -455,12 +455,17 @@ tonightBtn.addEventListener('click', () => {
     if (transientMap.size === 0) void loadTonightSnapshot();
     void fetchTransientsNearView();
     livePoll ??= setInterval(() => {
-      if (transientsOn) void fetchTransientsNearView();
+      // good neighbour: never poll the shared brokers from a hidden/backgrounded tab
+      if (transientsOn && !document.hidden) void fetchTransientsNearView();
     }, 30000);
   } else if (livePoll) {
     clearInterval(livePoll);
     livePoll = null;
   }
+});
+// catch up immediately when the tab becomes visible again (instead of waiting out the interval)
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && transientsOn) void fetchTransientsNearView();
 });
 
 // --- classification legend + per-class filter (markers coloured by the broker's ML class).

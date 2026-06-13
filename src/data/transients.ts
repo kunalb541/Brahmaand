@@ -130,6 +130,25 @@ function acquire(): Promise<void> {
   return new Promise((r) => waiters.push(r));
 }
 
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Good-neighbour fetch for the shared broker APIs: on 429/503 it backs off exponentially
+ * (honouring a `Retry-After` header when present) instead of retry-storming, and gives up
+ * after 3 attempts so callers fall back to cached/snapshot data. Never retries client errors.
+ */
+async function politeFetch(url: string, signal?: AbortSignal): Promise<Response> {
+  let delay = 2000;
+  for (let attempt = 0; ; attempt++) {
+    const r = await fetch(url, signal ? { signal } : {});
+    if (r.status !== 429 && r.status !== 503) return r;
+    if (attempt >= 2) return r; // surface the status; callers degrade gracefully
+    const ra = parseFloat(r.headers.get('Retry-After') ?? '');
+    await sleep(isFinite(ra) ? Math.min(ra * 1000, 30000) : delay);
+    delay *= 2;
+  }
+}
+
 const CONE_TTL_MS = 30000; // live: cone results expire so polling fetches fresh alerts
 const coneCache = new Map<string, { data: Transient[]; t: number }>();
 
@@ -151,7 +170,7 @@ export async function fetchNear(
     const url =
       `${ANTARES}/loci?filter%5Bcone%5D=${raDeg},${decDeg},${rad}` +
       `&page%5Bsize%5D=100&sort=-properties.newest_alert_observation_time`;
-    const r = await fetch(url, signal ? { signal } : {});
+    const r = await politeFetch(url, signal);
     if (!r.ok) throw new Error(`ANTARES ${r.status}`);
     const j = (await r.json()) as {
       data?: {
@@ -193,7 +212,7 @@ export async function fetchNear(
     const url =
       `${ALERCE}?ra=${raDeg}&dec=${decDeg}&radius=${radiusArcsec}` +
       `&page=1&page_size=40&order_by=lastmjd&order_mode=DESC&count=false`;
-    const r = await fetch(url, signal ? { signal } : {});
+    const r = await politeFetch(url, signal);
     if (!r.ok) throw new Error(`broker ${r.status}`);
     const j = (await r.json()) as { items?: Record<string, unknown>[] };
     out = (j.items ?? []).map((o) => ({
@@ -229,7 +248,7 @@ export async function fetchLightcurve(oid: string, signal?: AbortSignal): Promis
   await acquire();
 
   if (activeBroker === 'antares') {
-    const r = await fetch(`${ANTARES}/loci/${encodeURIComponent(oid)}`, signal ? { signal } : {});
+    const r = await politeFetch(`${ANTARES}/loci/${encodeURIComponent(oid)}`, signal);
     if (!r.ok) throw new Error(`ANTARES locus ${r.status}`);
     const j = (await r.json()) as { data?: { attributes?: { lightcurve?: string } } };
     // verified header: time,alert_id,ant_mjd,ant_survey,ant_ra,ant_dec,ant_passband,ant_mag,
@@ -266,7 +285,7 @@ export async function fetchLightcurve(oid: string, signal?: AbortSignal): Promis
     return lc;
   }
 
-  const r = await fetch(`${ALERCE}${encodeURIComponent(oid)}/lightcurve`, signal ? { signal } : {});
+  const r = await politeFetch(`${ALERCE}${encodeURIComponent(oid)}/lightcurve`, signal);
   if (!r.ok) throw new Error(`lightcurve ${r.status}`);
   const j = (await r.json()) as {
     detections?: Record<string, unknown>[];
@@ -319,7 +338,7 @@ export async function fetchProbabilities(oid: string, signal?: AbortSignal): Pro
   const cached = probCache.get(oid);
   if (cached) return cached;
   await acquire();
-  const r = await fetch(`${ALERCE}${encodeURIComponent(oid)}/probabilities`, signal ? { signal } : {});
+  const r = await politeFetch(`${ALERCE}${encodeURIComponent(oid)}/probabilities`, signal);
   if (!r.ok) throw new Error(`probabilities ${r.status}`);
   const j = (await r.json()) as Record<string, unknown>[];
   const out: ClassProb[] = j
