@@ -116,6 +116,25 @@ export function equatorialToHorizontal(
   };
 }
 
+/** Horizontal (alt, az-from-N-through-E, deg) → equatorial (RA, Dec, deg) for observer/time. */
+export function horizontalToEquatorial(
+  altDeg: number,
+  azDeg: number,
+  loc: GeoLocation,
+  unixMs: number,
+): { raDeg: number; decDeg: number } {
+  const alt = altDeg * DEG, az = azDeg * DEG, lat = loc.latDeg * DEG;
+  const sinDec = Math.sin(lat) * Math.sin(alt) + Math.cos(lat) * Math.cos(alt) * Math.cos(az);
+  const dec = Math.asin(Math.max(-1, Math.min(1, sinDec)));
+  const H = Math.atan2(
+    -Math.sin(az) * Math.cos(alt),
+    Math.sin(alt) * Math.cos(lat) - Math.cos(alt) * Math.sin(lat) * Math.cos(az),
+  );
+  let ra = lstDeg(unixMs, loc.lonDeg) - H * RAD;
+  ra = ((ra % 360) + 360) % 360;
+  return { raDeg: ra, decDeg: dec * RAD };
+}
+
 /** Kasten & Young (1989) relative air mass for a true altitude (deg). Infinity below the horizon. */
 export function airmass(altDeg: number): number {
   if (altDeg <= 0) return Infinity;

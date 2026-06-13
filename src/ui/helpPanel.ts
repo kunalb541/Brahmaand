@@ -13,8 +13,9 @@ const S = {
 
 export function initHelpPanel(): void {
   const btn = document.createElement('button');
+  btn.id = 'help-btn';
   btn.textContent = '?';
-  btn.title = 'Help — controls & how to install on your phone';
+  btn.title = 'Help — controls & how to install on your phone (press ?)';
   document.getElementById('topbar-actions')!.appendChild(btn);
 
   const modal = document.createElement('div');
@@ -34,6 +35,20 @@ export function initHelpPanel(): void {
     `<p style="${S.p}"><b>📱 Move-to-look:</b> tap the button at the bottom of the sky, allow motion (and location), ` +
     `then just move your phone — the view follows. With GPS + compass it becomes <b>📡 Sky-locked</b>: the app shows ` +
     `the real stars in the direction you're pointing, north or south. Fly back home anytime with ⌂ Return to Earth.</p>` +
+
+    `<div style="${S.h}">Keyboard shortcuts</div>` +
+    `<p style="${S.p}"><span style="${S.k}">⌘K</span>/<span style="${S.k}">Ctrl-K</span> command palette · ` +
+    `<span style="${S.k}">/</span> search · <span style="${S.k}">C</span> constellations · <span style="${S.k}">B</span> boundaries · ` +
+    `<span style="${S.k}">L</span> star labels · <span style="${S.k}">M</span> Messier · <span style="${S.k}">G</span> eq grid · ` +
+    `<span style="${S.k}">E</span> ecliptic · <span style="${S.k}">H</span> horizon grid · <span style="${S.k}">P</span> planets · ` +
+    `<span style="${S.k}">T</span> live alerts · <span style="${S.k}">F</span> FOV circle · ` +
+    `<span style="${S.k}">[</span>/<span style="${S.k}">]</span> time ±1 day · <span style="${S.k}">N</span> back to now · ` +
+    `<span style="${S.k}">?</span> this help.</p>` +
+
+    `<div style="${S.h}">Time machine</div>` +
+    `<p style="${S.p}">The bar above the status line scrubs time: <b>−1d / +1d</b> jump days, <b>◀◀ / ▶▶</b> change ` +
+    `speed (up to ±1 year per second), click the date to type one, <b>● Now</b> returns to real time (amber = time-warped). ` +
+    `The Sun, Moon (with its real phase) and planets move accordingly — try the 2020-12-21 Jupiter–Saturn conjunction.</p>` +
 
     `<div style="${S.h}">What you're seeing</div>` +
     `<p style="${S.p}">Everything is real data: survey photography (DSS2 base; zoom in and the active survey's ` +

@@ -149,6 +149,61 @@ async function politeFetch(url: string, signal?: AbortSignal): Promise<Response>
   }
 }
 
+interface AntaresLociJson {
+  data?: {
+    id: string;
+    attributes: Record<string, unknown>;
+    meta?: { newest_thumbnails?: { data?: { attributes?: { src?: string; thumbnail_type?: string } } }[] };
+  }[];
+}
+
+/** JSON:API loci listing → Transients (incl. tags + science/template/difference stamps). */
+function parseAntaresLoci(j: AntaresLociJson): Transient[] {
+  return (j.data ?? [])
+    .map((o) => {
+      const a = o.attributes;
+      const p = (a['properties'] ?? {}) as Record<string, number>;
+      const tags = (a['tags'] as string[]) ?? [];
+      // verified path: meta.newest_thumbnails[].data.attributes.{src, thumbnail_type}
+      let stamps: Transient['stamps'];
+      for (const th of o.meta?.newest_thumbnails ?? []) {
+        const at = th.data?.attributes;
+        if (!at?.src || !at.thumbnail_type) continue;
+        stamps ??= {};
+        if (at.thumbnail_type === 'science') stamps.science = at.src;
+        else if (at.thumbnail_type === 'template') stamps.template = at.src;
+        else if (at.thumbnail_type === 'difference') stamps.difference = at.src;
+      }
+      return {
+        oid: o.id,
+        raDeg: Number(a['ra']),
+        decDeg: Number(a['dec']),
+        firstMjd: Number(p['oldest_alert_observation_time'] ?? p['newest_alert_observation_time']),
+        lastMjd: Number(p['newest_alert_observation_time']),
+        ndet: Number(p['num_alerts'] ?? 1),
+        cls: antaresCls(tags),
+        tags,
+        stamps,
+      };
+    })
+    .filter((t) => isFinite(t.raDeg) && isFinite(t.decDeg));
+}
+
+/**
+ * ANTARES stream/tag explorer: the most recent loci carrying a community-filter tag
+ * (nuclear_transient, anomaly detectors, sso_confirmed, …) via the ElasticSearch DSL param.
+ */
+export async function fetchByTag(tag: string, signal?: AbortSignal): Promise<Transient[]> {
+  await acquire();
+  const es = encodeURIComponent(JSON.stringify({ query: { term: { tags: tag } } }));
+  const url =
+    `${ANTARES}/loci?elasticsearch_query%5Blocus_listing%5D=${es}` +
+    `&page%5Blimit%5D=100&sort=-properties.newest_alert_observation_time`;
+  const r = await politeFetch(url, signal);
+  if (!r.ok) throw new Error(`ANTARES tag ${r.status}`);
+  return parseAntaresLoci(await r.json());
+}
+
 const CONE_TTL_MS = 30000; // live: cone results expire so polling fetches fresh alerts
 const coneCache = new Map<string, { data: Transient[]; t: number }>();
 
@@ -172,41 +227,7 @@ export async function fetchNear(
       `&page%5Bsize%5D=100&sort=-properties.newest_alert_observation_time`;
     const r = await politeFetch(url, signal);
     if (!r.ok) throw new Error(`ANTARES ${r.status}`);
-    const j = (await r.json()) as {
-      data?: {
-        id: string;
-        attributes: Record<string, unknown>;
-        meta?: { newest_thumbnails?: { data?: { attributes?: { src?: string; thumbnail_type?: string } } }[] };
-      }[];
-    };
-    out = (j.data ?? [])
-      .map((o) => {
-        const a = o.attributes;
-        const p = (a['properties'] ?? {}) as Record<string, number>;
-        const tags = (a['tags'] as string[]) ?? [];
-        // science/template/difference alert stamps (verified path: meta.newest_thumbnails[].data.attributes)
-        let stamps: Transient['stamps'];
-        for (const th of o.meta?.newest_thumbnails ?? []) {
-          const at = th.data?.attributes;
-          if (!at?.src || !at.thumbnail_type) continue;
-          stamps ??= {};
-          if (at.thumbnail_type === 'science') stamps.science = at.src;
-          else if (at.thumbnail_type === 'template') stamps.template = at.src;
-          else if (at.thumbnail_type === 'difference') stamps.difference = at.src;
-        }
-        return {
-          oid: o.id,
-          raDeg: Number(a['ra']),
-          decDeg: Number(a['dec']),
-          firstMjd: Number(p['oldest_alert_observation_time'] ?? p['newest_alert_observation_time']),
-          lastMjd: Number(p['newest_alert_observation_time']),
-          ndet: Number(p['num_alerts'] ?? 1),
-          cls: antaresCls(tags),
-          tags,
-          stamps,
-        };
-      })
-      .filter((t) => isFinite(t.raDeg) && isFinite(t.decDeg));
+    out = parseAntaresLoci(await r.json());
   } else {
     const radiusArcsec = Math.min(radiusDeg * 3600, 36000);
     const url =

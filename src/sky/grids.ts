@@ -101,3 +101,58 @@ export function createGalacticEquator(): THREE.LineSegments {
   arc(pos, (lDeg) => galacticToRaDec(lDeg, 0), 0, 360, 360);
   return lineSegs(pos, 0x8f7fd0, 0.6); // violet
 }
+
+/**
+ * Precession circles: the 25,800-year path of the celestial poles around the ecliptic poles —
+ * i.e. ecliptic latitude β = ±(90° − ε). (Polaris is only "the" pole star for a while…)
+ */
+export function createPrecessionCircles(): THREE.LineSegments {
+  const eps = 23.4393 * DEG2RAD;
+  const pos: number[] = [];
+  for (const sign of [1, -1]) {
+    const beta = sign * (Math.PI / 2 - eps);
+    arc(
+      pos,
+      (lonDeg) => {
+        const lon = lonDeg * DEG2RAD;
+        const dec = Math.asin(
+          Math.sin(beta) * Math.cos(eps) + Math.cos(beta) * Math.sin(eps) * Math.sin(lon),
+        );
+        const ra = Math.atan2(
+          Math.cos(beta) * Math.sin(lon) * Math.cos(eps) - Math.sin(beta) * Math.sin(eps),
+          Math.cos(beta) * Math.cos(lon),
+        );
+        return [ra, dec];
+      },
+      0,
+      360,
+      240,
+    );
+  }
+  return lineSegs(pos, 0x9a8a50, 0.4);
+}
+
+/**
+ * Horizon (alt/az) grid for an observer + instant: altitude circles every 20° (horizon itself
+ * emphasised by the caller via a second call at alt 0) and azimuth meridians every 30°, with
+ * N/E/S/W implied by the meridians. Time-dependent — rebuild ~1 Hz while visible.
+ * `toEq` is observability.horizontalToEquatorial bound to (loc, time).
+ */
+export function buildHorizonGrid(
+  toEq: (altDeg: number, azDeg: number) => { raDeg: number; decDeg: number },
+): THREE.LineSegments {
+  const pos: number[] = [];
+  const f = (alt: number, az: number): [number, number] => {
+    const e = toEq(alt, az);
+    return [e.raDeg * DEG2RAD, e.decDeg * DEG2RAD];
+  };
+  // altitude circles (the horizon at 0° plus 20/40/60/80)
+  for (const alt of [0, 20, 40, 60, 80]) {
+    arc(pos, (az) => f(alt, az), 0, 360, alt === 0 ? 360 : 180);
+  }
+  // azimuth meridians every 30°, horizon → zenith
+  for (let az = 0; az < 360; az += 30) {
+    arc(pos, (alt) => f(alt, az), 0, 88, 44);
+  }
+  return lineSegs(pos, 0x4f9f7f, 0.5); // green — the local-sky frame
+}

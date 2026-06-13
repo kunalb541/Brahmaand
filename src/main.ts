@@ -6,16 +6,26 @@ import { StatsHud } from './core/stats';
 import { LookControls } from './core/lookControls';
 import { createSkySphere } from './sky/skySphere';
 import { HipsLayer } from './sky/hips/hipsLayer';
-import { createConstellationLines } from './sky/constellations';
-import { createEquatorialGrid, createEquator, createEcliptic, createGalacticEquator } from './sky/grids';
+import { createConstellationLines, createConstellationBoundaries } from './sky/constellations';
+import {
+  createEquatorialGrid,
+  createEquator,
+  createEcliptic,
+  createGalacticEquator,
+  createPrecessionCircles,
+  buildHorizonGrid,
+} from './sky/grids';
+import { MessierLayer } from './sky/messier';
 import { SolarSystemLayer } from './sky/solarSystem';
-import { solarSystemAt } from './data/ephemeris';
+import { solarSystemAt, angularSepDeg } from './data/ephemeris';
+import { getObserver, acquireObserver, horizontalToEquatorial } from './data/observability';
 import { getSimMs, getRate, setRate, setSimMs, resetToNow, isLive } from './core/simTime';
 import { StarLabels } from './sky/starLabels';
 import { StarField } from './stars/starField';
 import { TransientLayer } from './sky/transientLayer';
 import {
   fetchNear,
+  fetchByTag,
   loadSnapshot,
   getBroker,
   setBroker,
@@ -38,7 +48,7 @@ import { SURVEYS, type SurveyEntry } from './config/surveys';
 import { getMode, setMode, onModeChange, isPro } from './config/mode';
 import { initHelpPanel } from './ui/helpPanel';
 import { DEG2RAD, RAD2DEG } from './math/angles';
-import { worldToRaDec } from './math/frames';
+import { worldToRaDec, raDecToWorld } from './math/frames';
 
 const canvas = document.createElement('canvas');
 document.body.appendChild(canvas);
@@ -133,6 +143,15 @@ createConstellationLines('data/constellations.lines.json')
   })
   .catch((e) => console.warn('constellations failed to load', e));
 
+let boundaries: THREE.LineSegments | null = null;
+createConstellationBoundaries('data/constellations.bounds.json')
+  .then((lines) => {
+    boundaries = lines;
+    scene.add(lines);
+  })
+  .catch((e) => console.warn('constellation boundaries failed to load', e));
+let boundariesOn = false;
+
 let constellationsOn = true;
 let starLabelsOn = true;
 const toggleConst = document.getElementById('toggle-const') as HTMLButtonElement;
@@ -149,10 +168,11 @@ const equGrid = createEquatorialGrid();
 const equator = createEquator();
 const ecliptic = createEcliptic();
 const galactic = createGalacticEquator();
+const precession = createPrecessionCircles();
 const gridGroup = new THREE.Group();
-gridGroup.add(equGrid, equator, ecliptic, galactic);
+gridGroup.add(equGrid, equator, ecliptic, galactic, precession);
 scene.add(gridGroup);
-const gridOn = { equ: false, ecl: false, gal: false };
+const gridOn = { equ: false, ecl: false, gal: false, hor: false };
 const wireGrid = (id: string, key: keyof typeof gridOn) => {
   const btn = document.getElementById(id) as HTMLButtonElement;
   btn.addEventListener('click', () => (gridOn[key] = btn.classList.toggle('active')));
@@ -160,6 +180,47 @@ const wireGrid = (id: string, key: keyof typeof gridOn) => {
 wireGrid('toggle-grid', 'equ');
 wireGrid('toggle-ecliptic', 'ecl');
 wireGrid('toggle-galactic', 'gal');
+
+// horizon (alt/az) grid — observer + time dependent, rebuilt ~1 Hz while shown
+let horizonGrid: THREE.LineSegments | null = null;
+let horizonBuiltMs = 0;
+let horizonBuiltSim = 0;
+const horizonBtn = document.getElementById('toggle-horizon') as HTMLButtonElement;
+horizonBtn.addEventListener('click', () => {
+  if (!getObserver()) acquireObserver(); // best-effort GPS; grid appears once a fix lands
+  gridOn.hor = horizonBtn.classList.toggle('active');
+});
+function refreshHorizonGrid(): void {
+  const obs = getObserver();
+  if (!gridOn.hor || !obs) {
+    if (horizonGrid) horizonGrid.visible = false;
+    return;
+  }
+  const sim = getSimMs();
+  const stale = Date.now() - horizonBuiltMs > 1000 || Math.abs(sim - horizonBuiltSim) > 30000;
+  if (stale) {
+    if (horizonGrid) {
+      gridGroup.remove(horizonGrid);
+      horizonGrid.geometry.dispose();
+      (horizonGrid.material as THREE.Material).dispose();
+    }
+    horizonGrid = buildHorizonGrid((alt, az) => horizontalToEquatorial(alt, az, obs, sim));
+    gridGroup.add(horizonGrid);
+    horizonBuiltMs = Date.now();
+    horizonBuiltSim = sim;
+  }
+  horizonGrid!.visible = true;
+}
+
+// constellation boundaries + Messier toggles
+(document.getElementById('toggle-bounds') as HTMLButtonElement).addEventListener('click', (e) => {
+  boundariesOn = (e.currentTarget as HTMLButtonElement).classList.toggle('active');
+});
+let messierOn = false;
+(document.getElementById('toggle-messier') as HTMLButtonElement).addEventListener('click', (e) => {
+  messierOn = (e.currentTarget as HTMLButtonElement).classList.toggle('active');
+  messier.setVisible(messierOn);
+});
 
 // --- Solar system (Sun, Moon with phase, planets) + the time machine ---
 const solar = new SolarSystemLayer(scene);
@@ -242,8 +303,60 @@ toolsRow.className = 'row';
 toolsRow.innerHTML =
   '<button id="return-earth">⌂ Return to Earth</button>' +
   '<button id="share-view" title="copy a link to this exact view">⌁ Share</button>' +
-  '<button id="toggle-fov" title="Field-of-view framing circle (cycles common eyepiece/detector sizes)">⊕ FOV</button>';
+  '<button id="toggle-fov" title="Field-of-view framing circle (cycles common eyepiece/detector sizes)">⊕ FOV</button>' +
+  '<button id="toggle-measure" title="Angular separation: click two points on the sky">📐 Measure</button>';
 document.getElementById('sec-tools')!.appendChild(toolsRow);
+
+// angular-separation measurement: two sky clicks → great-circle distance + a drawn arc
+let measureMode = false;
+let measureA: { ra: number; dec: number } | null = null;
+let measureLine: THREE.Line | null = null;
+const measureBtn = document.getElementById('toggle-measure') as HTMLButtonElement;
+const clearMeasure = (): void => {
+  measureA = null;
+  if (measureLine) {
+    scene.remove(measureLine);
+    measureLine.geometry.dispose();
+    (measureLine.material as THREE.Material).dispose();
+    measureLine = null;
+  }
+};
+measureBtn.addEventListener('click', () => {
+  measureMode = measureBtn.classList.toggle('active');
+  measureBtn.textContent = measureMode ? '📐 click 1st point' : '📐 Measure';
+  clearMeasure();
+});
+function handleMeasureClick(raDeg: number, decDeg: number): void {
+  if (!measureA) {
+    measureA = { ra: raDeg, dec: decDeg };
+    measureBtn.textContent = '📐 click 2nd point';
+    return;
+  }
+  const A = measureA; // capture before any clearing
+  const sep = angularSepDeg(A.ra, A.dec, raDeg, decDeg);
+  const sepTxt =
+    sep >= 1 ? `${sep.toFixed(3)}°` : sep >= 1 / 60 ? `${(sep * 60).toFixed(2)}′` : `${(sep * 3600).toFixed(1)}″`;
+  clearMeasure();
+  measureBtn.textContent = `📐 ${sepTxt} (tap to clear)`;
+  // draw the great-circle arc between the two points
+  const a = new THREE.Vector3(), b = new THREE.Vector3(), p = new THREE.Vector3();
+  raDecToWorld(A.ra * DEG2RAD, A.dec * DEG2RAD, a);
+  raDecToWorld(raDeg * DEG2RAD, decDeg * DEG2RAD, b);
+  const pts: THREE.Vector3[] = [];
+  const steps = Math.max(8, Math.ceil(sep));
+  for (let i = 0; i <= steps; i++) {
+    p.copy(a).lerp(b, i / steps).normalize().multiplyScalar(490);
+    pts.push(p.clone());
+  }
+  measureLine = new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints(pts),
+    new THREE.LineBasicMaterial({ color: 0xffd27a, transparent: true, opacity: 0.9, depthTest: false }),
+  );
+  measureLine.renderOrder = 5;
+  measureLine.position.copy(rig.position);
+  scene.add(measureLine);
+  measureA = { ra: raDeg, dec: decDeg }; // chain: next click measures from the last point
+}
 
 // FOV framing tool: a centred circle of a chosen TRUE angular diameter, scaling with zoom — frames
 // an eyepiece / detector / finder field (a Stellarium "ocular"-style aid). Cycles preset sizes.
@@ -375,6 +488,13 @@ const objectPanel = new ObjectPanel({
   getFovDeg: () => controls.fovDeg,
 });
 
+// Messier deep-sky labels (SIMBAD positions) — click a label to fly + inspect
+const messier = new MessierLayer(camera, (raDeg, decDeg) => {
+  fly.reset();
+  controls.flyTo(raDeg * DEG2RAD, decDeg * DEG2RAD, 2);
+  void objectPanel.identifyAt(raDeg, decDeg);
+});
+
 // --- Live transients ("Tonight": Rubin/LSST-precursor ZTF alerts via ALeRCE) ---
 const transientLayer = new TransientLayer(scene);
 const transientMap = new Map<string, Transient>();
@@ -411,6 +531,7 @@ const alertsBtnRow = document.createElement('div');
 alertsBtnRow.className = 'row';
 alertsSec.appendChild(alertsBtnRow);
 const tonightBtn = document.createElement('button');
+tonightBtn.id = 'toggle-alerts';
 tonightBtn.textContent = '◎ Live alerts';
 tonightBtn.title = 'Stream live transient alerts (all-sky) from the broker';
 alertsBtnRow.appendChild(tonightBtn);
@@ -438,6 +559,58 @@ brokerBtn.addEventListener('click', () => {
     void loadTonightSnapshot();
     void fetchTransientsNearView();
   }
+});
+
+// ANTARES stream/tag explorer: pull the most recent loci in a community stream
+// (nuclear transients, anomaly detectors, confirmed solar-system objects, …)
+const TAG_OPTIONS: [string, string][] = [
+  ['', 'Streams (ANTARES tags)…'],
+  ['nuclear_transient', 'Nuclear transients (TDE/AGN flares)'],
+  ['extragalactic', 'Extragalactic'],
+  ['young_extragalactic_candidate', 'Young extragalactic candidates'],
+  ['high_amplitude_transient_candidate', 'High-amplitude transients'],
+  ['high_snr', 'High signal-to-noise alerts'],
+  ['iso_forest_anomaly_detection', 'Anomalies (isolation forest)'],
+  ['LAISS_RFC_AD_filter', 'Anomalies (LAISS)'],
+  ['dwarf_nova_outburst', 'Dwarf-nova outbursts'],
+  ['sso_confirmed', 'Solar-system objects (confirmed)'],
+  ['in_m31', 'In M31 line of sight'],
+  ['refitt_newsources_snrcut', 'REFITT follow-up candidates'],
+];
+const tagSel = document.createElement('select');
+tagSel.title = 'Browse an ANTARES community alert stream (loads the 100 most recent)';
+tagSel.style.cssText =
+  'font:11px ui-monospace,monospace;color:#dcebff;background:rgba(40,70,130,.45);' +
+  'border:1px solid rgba(120,170,255,.3);border-radius:6px;padding:3px 6px;max-width:100%';
+for (const [val, label] of TAG_OPTIONS) {
+  const o = document.createElement('option');
+  o.value = val;
+  o.textContent = label;
+  tagSel.appendChild(o);
+}
+const tagRow = document.createElement('div');
+tagRow.className = 'row';
+tagRow.appendChild(tagSel);
+alertsSec.appendChild(tagRow);
+tagSel.addEventListener('change', () => {
+  const tag = tagSel.value;
+  if (!tag) return;
+  if (!transientsOn) tonightBtn.click(); // streams imply the alert layer
+  if (getBroker() !== 'antares') {
+    setBroker('antares'); // tags are an ANTARES concept
+    updateBrokerBtn();
+  }
+  liveStatus.textContent = `◌ loading stream ${tag}…`;
+  fetchByTag(tag)
+    .then((list) => {
+      for (const t of list) transientMap.set(t.oid, t);
+      applyTransients();
+      liveStatus.textContent = `● stream: ${tag} · ${list.length} loci loaded`;
+    })
+    .catch((e) => {
+      liveStatus.textContent = `stream ${tag} unavailable — try again`;
+      console.warn('tag stream failed', e);
+    });
 });
 
 // Live polling: while alerts are on, re-query the broker near the view every 30 s (the cone
@@ -617,6 +790,11 @@ canvas.addEventListener('pointerup', (e) => {
 
 /** Shared by mouse-click and the XR trigger: solar-system body, then transient, else SIMBAD. */
 function pickSkyDirection(dir: THREE.Vector3): void {
+  if (measureMode) {
+    worldToRaDec(dir, clickRd);
+    handleMeasureClick(clickRd.raRad * RAD2DEG, clickRd.decRad * RAD2DEG);
+    return;
+  }
   if (solarOn) {
     const body = solar.pick(dir, Math.max(0.7, controls.fovDeg / 30));
     if (body) {
@@ -755,6 +933,123 @@ aboutPanel.addEventListener('click', (e) => {
   if (e.target === aboutPanel || (e.target as HTMLElement).id === 'about-close') aboutPanel.style.display = 'none';
 });
 
+// --- Keyboard hotkeys (Stellarium-style) + ⌘K command palette ---
+const CLICK_CMDS: { label: string; id: string; key?: string }[] = [
+  { label: 'Toggle constellations', id: 'toggle-const', key: 'c' },
+  { label: 'Toggle star labels', id: 'toggle-stars', key: 'l' },
+  { label: 'Toggle equatorial grid', id: 'toggle-grid', key: 'g' },
+  { label: 'Toggle ecliptic + precession', id: 'toggle-ecliptic', key: 'e' },
+  { label: 'Toggle galactic plane', id: 'toggle-galactic' },
+  { label: 'Toggle horizon grid', id: 'toggle-horizon', key: 'h' },
+  { label: 'Toggle constellation boundaries', id: 'toggle-bounds', key: 'b' },
+  { label: 'Toggle Messier objects', id: 'toggle-messier', key: 'm' },
+  { label: 'Toggle planets / Moon / Sun', id: 'toggle-solar', key: 'p' },
+  { label: 'Toggle live alerts', id: 'toggle-alerts', key: 't' },
+  { label: 'Cycle FOV framing circle', id: 'toggle-fov', key: 'f' },
+  { label: 'Measure angular separation', id: 'toggle-measure' },
+  { label: 'Return to Earth', id: 'return-earth' },
+  { label: 'Share this view', id: 'share-view' },
+  { label: 'Time: back 1 day', id: 't-back1d', key: '[' },
+  { label: 'Time: forward 1 day', id: 't-fwd1d', key: ']' },
+  { label: 'Time: pause / resume', id: 't-pause' },
+  { label: 'Time: back to now', id: 't-now', key: 'n' },
+  { label: 'Help', id: 'help-btn', key: '?' },
+];
+const clickById = (id: string): void => (document.getElementById(id) as HTMLButtonElement | null)?.click();
+
+// palette overlay
+const palette = document.createElement('div');
+palette.style.cssText =
+  'position:fixed;inset:0;z-index:30;display:none;background:rgba(2,6,14,.55);backdrop-filter:blur(2px)';
+palette.innerHTML =
+  '<div style="max-width:430px;margin:12vh auto 0;background:rgba(10,18,34,.97);border:1px solid rgba(120,170,255,.3);border-radius:12px;padding:10px">' +
+  '<input id="pal-in" placeholder="Type a command… or an object name (M31, Vega…)" style="width:100%;box-sizing:border-box;font:13px ui-monospace,monospace;color:#dcebff;background:rgba(6,12,24,.8);border:1px solid rgba(120,170,255,.35);border-radius:8px;padding:8px 10px;outline:none">' +
+  '<div id="pal-list" style="margin-top:6px;max-height:42vh;overflow-y:auto;font:12px ui-monospace,monospace"></div></div>';
+document.body.appendChild(palette);
+const palIn = palette.querySelector('#pal-in') as HTMLInputElement;
+const palList = palette.querySelector('#pal-list') as HTMLDivElement;
+let palSel = 0;
+function palRender(): void {
+  const q = palIn.value.trim().toLowerCase();
+  const hits = CLICK_CMDS.filter((c) => !q || c.label.toLowerCase().includes(q));
+  const searchRow = q && !hits.length ? [`Search the sky for “${palIn.value.trim()}”`] : [];
+  palSel = Math.min(palSel, hits.length + searchRow.length - 1);
+  palList.innerHTML =
+    hits
+      .map(
+        (c, i) =>
+          `<div data-i="${i}" style="padding:5px 8px;border-radius:6px;cursor:pointer;display:flex;${i === palSel ? 'background:rgba(90,140,230,.35)' : ''}">${c.label}` +
+          (c.key ? `<span style="margin-left:auto;color:#7f93b5">${c.key}</span>` : '') +
+          '</div>',
+      )
+      .join('') +
+    searchRow
+      .map((s) => `<div data-search style="padding:5px 8px;border-radius:6px;cursor:pointer;background:rgba(90,140,230,.35)">${s}</div>`)
+      .join('');
+}
+function palClose(): void {
+  palette.style.display = 'none';
+}
+function palRun(): void {
+  const q = palIn.value.trim().toLowerCase();
+  const hits = CLICK_CMDS.filter((c) => !q || c.label.toLowerCase().includes(q));
+  if (hits[palSel]) clickById(hits[palSel]!.id);
+  else if (palIn.value.trim()) {
+    const inp = document.getElementById('obj-search') as HTMLInputElement;
+    inp.value = palIn.value.trim();
+    inp.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  }
+  palClose();
+}
+palIn.addEventListener('input', () => {
+  palSel = 0;
+  palRender();
+});
+palIn.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') palClose();
+  else if (e.key === 'Enter') palRun();
+  else if (e.key === 'ArrowDown') {
+    palSel++;
+    palRender();
+    e.preventDefault();
+  } else if (e.key === 'ArrowUp') {
+    palSel = Math.max(0, palSel - 1);
+    palRender();
+    e.preventDefault();
+  }
+});
+palList.addEventListener('click', (e) => {
+  const row = (e.target as HTMLElement).closest('[data-i],[data-search]') as HTMLElement | null;
+  if (!row) return;
+  if (row.dataset.i != null) palSel = parseInt(row.dataset.i, 10);
+  palRun();
+});
+palette.addEventListener('click', (e) => {
+  if (e.target === palette) palClose();
+});
+
+addEventListener('keydown', (e) => {
+  const tgt = e.target as HTMLElement;
+  const typing = tgt.tagName === 'INPUT' || tgt.tagName === 'TEXTAREA';
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+    e.preventDefault();
+    palette.style.display = 'block';
+    palIn.value = '';
+    palSel = 0;
+    palRender();
+    palIn.focus();
+    return;
+  }
+  if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.key === '/') {
+    e.preventDefault();
+    (document.getElementById('obj-search') as HTMLInputElement).focus();
+    return;
+  }
+  const cmd = CLICK_CMDS.find((c) => c.key === e.key.toLowerCase() || (e.key === '?' && c.key === '?'));
+  if (cmd) clickById(cmd.id);
+});
+
 // --- Dock behaviour: accordion sections + the phone drawer (☰) ---
 for (const h of document.querySelectorAll<HTMLElement>('#dock h2[data-sec]')) {
   h.addEventListener('click', () => h.parentElement!.classList.toggle('closed'));
@@ -821,12 +1116,20 @@ startLoop(renderer, (dt) => {
       (constellations.material as THREE.LineBasicMaterial).opacity = 0.55 * f;
       constellations.visible = constellationsOn && f > 0.02;
     }
+    if (boundaries) {
+      boundaries.position.copy(rig.position);
+      (boundaries.material as THREE.LineBasicMaterial).opacity = 0.38 * f;
+      boundaries.visible = boundariesOn && f > 0.02;
+    }
+    if (hudTick) messier.update(controls.fovDeg);
+
     // reference grids/lines: pinned to the sky, shown only in the planetarium (Earth) view
     gridGroup.position.copy(rig.position);
-    gridGroup.visible = f > 0.4 && (gridOn.equ || gridOn.ecl || gridOn.gal);
+    gridGroup.visible = f > 0.4 && (gridOn.equ || gridOn.ecl || gridOn.gal || gridOn.hor);
     equGrid.visible = equator.visible = gridOn.equ;
-    ecliptic.visible = gridOn.ecl;
+    ecliptic.visible = precession.visible = gridOn.ecl;
     galactic.visible = gridOn.gal;
+    if (hudTick) refreshHorizonGrid();
 
     // solar system: ephemerides at sim-time (10 Hz is plenty — bodies move slowly on screen),
     // sized true-to-angular-diameter, Moon limb turned toward the Sun
