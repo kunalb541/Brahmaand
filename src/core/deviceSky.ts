@@ -54,7 +54,6 @@ const q1 = new THREE.Quaternion(-Math.sqrt(0.5), 0, 0, Math.sqrt(0.5)); // -90°
 const quat = new THREE.Quaternion();
 const look = new THREE.Vector3();
 const look2 = new THREE.Vector3();
-const top = new THREE.Vector3();
 const eVec = new THREE.Vector3(); // East-horizon-point direction in the celestial world frame
 const nVec = new THREE.Vector3(); // North-horizon-point direction
 const uVec = new THREE.Vector3(); // Zenith direction
@@ -85,6 +84,64 @@ function gmstRad(unixMs: number): number {
 /** Local Sidereal Time (radians) at east-positive longitude `lonRad`. */
 function lstRad(unixMs: number, lonRad: number): number {
   return gmstRad(unixMs) + lonRad;
+}
+
+/** Device orientation (radians) → horizon ENU components of the look (camera −Z) direction. */
+export function deviceLookEnu(
+  alpha: number,
+  beta: number,
+  gamma: number,
+  orient: number,
+): { E: number; N: number; U: number } {
+  const q = deviceQuaternion(alpha, beta, gamma, orient);
+  look.set(0, 0, -1).applyQuaternion(q).normalize();
+  return { E: look.x, N: -look.z, U: look.y }; // East=+X, North=−Z, Up=+Y
+}
+
+/**
+ * Aligned horizon vector (E0,N0,U0) → a world look direction. With lat + LST it maps onto the real
+ * celestial sphere as a LINEAR combination of three basis directions (east-horizon / north-horizon
+ * / zenith) — singularity-free, so it never spins, even at the zenith. Without lat/LST it returns
+ * the aligned relative look vector. `yaw` rotates about Up (north seed + manual align); `altOffset`
+ * tilts about East. Returns true when the absolute (sky-registered) branch was used.
+ */
+export function enuToSkyDir(
+  E0: number,
+  N0: number,
+  U0: number,
+  yaw: number,
+  altOffset: number,
+  latRad: number | null,
+  lst: number | null,
+  out: THREE.Vector3,
+): boolean {
+  const cy = Math.cos(yaw);
+  const sy = Math.sin(yaw);
+  const E = E0 * cy + N0 * sy;
+  let N = N0 * cy - E0 * sy;
+  let U = U0;
+  if (altOffset) {
+    const ca = Math.cos(altOffset);
+    const sa = Math.sin(altOffset);
+    const n2 = N * ca - U * sa;
+    U = N * sa + U * ca;
+    N = n2;
+  }
+  if (latRad != null && lst != null) {
+    raDecToWorld(lst + Math.PI / 2, 0, eVec); // east horizon point
+    raDecToWorld(lst, latRad, uVec); // zenith
+    raDecToWorld(lst + Math.PI, Math.PI / 2 - latRad, nVec); // north horizon point
+    out
+      .set(
+        E * eVec.x + N * nVec.x + U * uVec.x,
+        E * eVec.y + N * nVec.y + U * uVec.y,
+        E * eVec.z + N * nVec.z + U * uVec.z,
+      )
+      .normalize();
+    return true;
+  }
+  out.set(E, U, -N).normalize(); // relative window, Y-up
+  return false;
 }
 
 export class DeviceSky {
@@ -310,10 +367,13 @@ export class DeviceSky {
     const orient = ((screen.orientation?.angle ?? (window as unknown as { orientation?: number }).orientation ?? 0) *
       Math.PI) /
       180;
-    const q = deviceQuaternion(e.alpha * DEG2RAD, e.beta * DEG2RAD, e.gamma * DEG2RAD, orient);
-    // look direction in the gravity-referenced frame (X = east-ish, Y = zenith, −Z = north-ish)
-    look.set(0, 0, -1).applyQuaternion(q).normalize();
-    top.set(0, 1, 0).applyQuaternion(q).normalize(); // device top (for the level-pose seed gate)
+    // gravity-referenced look as horizon ENU (pure; same path the unit tests drive)
+    const { E: E0, N: N0, U: U0 } = deviceLookEnu(
+      e.alpha * DEG2RAD,
+      e.beta * DEG2RAD,
+      e.gamma * DEG2RAD,
+      orient,
+    );
 
     // Compass heading (deg clockwise from true north): iOS exposes webkitCompassHeading;
     // Android's absolute stream has north-referenced alpha (0 = north, counter-clockwise).
@@ -326,60 +386,26 @@ export class DeviceSky {
     }
     this.headingDeg = headingDeg;
 
-    // ENU components of the look direction in the gravity frame (East=+X, North=−Z, Up=+Y).
-    const E0 = look.x;
-    const N0 = -look.z;
-    const U0 = look.y;
-
     // ONE-TIME north seed: when the phone is roughly level the look azimuth ≈ the compass heading,
     // so capture the constant gyro→true-north offset once. We never feed the compass after that
     // (continuous heading jitter + the azimuth gimbal near the zenith were what made it spin).
     if (!this.seeded && headingDeg != null && Math.abs(U0) < 0.5) {
       const trueAz = (AZ_SIGN * headingDeg + AZ_OFFSET_DEG) * DEG2RAD;
-      const gyroAz = Math.atan2(E0, N0);
-      this.compassSeed = trueAz - gyroAz;
+      this.compassSeed = trueAz - Math.atan2(E0, N0);
       this.seeded = true;
     }
 
-    // North-align (rotate ENU about Up by the seed + the user's manual offset) — a pure rotation,
-    // singularity-free. Then a small altitude nudge (tilt N/U about East).
-    const yaw = this.compassSeed + this.azOffsetUser;
-    const cy = Math.cos(yaw);
-    const sy = Math.sin(yaw);
-    const E = E0 * cy + N0 * sy;
-    let N = N0 * cy - E0 * sy;
-    let U = U0;
-    if (this.altOffsetUser) {
-      const ca = Math.cos(this.altOffsetUser);
-      const sa = Math.sin(this.altOffsetUser);
-      const n2 = N * ca - U * sa;
-      U = N * sa + U * ca;
-      N = n2;
-    }
-
-    if (this.latRad != null && this.lonRad != null) {
-      // ABSOLUTE: map the aligned horizon vector (E,N,U) → equatorial world by latitude + LST as a
-      // LINEAR combination of three basis directions (East/North/Zenith). No az/alt decomposition,
-      // so it never spins — even pointing at the zenith — and it tracks the sky's rotation via LST.
-      const theta = lstRad(Date.now(), this.lonRad); // RA on the meridian (= RA at zenith)
-      const phi = this.latRad;
-      raDecToWorld(theta + Math.PI / 2, 0, eVec); // east horizon point
-      raDecToWorld(theta, phi, uVec); // zenith
-      raDecToWorld(theta + Math.PI, Math.PI / 2 - phi, nVec); // north horizon point
-      this.targetDir
-        .set(
-          E * eVec.x + N * nVec.x + U * uVec.x,
-          E * eVec.y + N * nVec.y + U * uVec.y,
-          E * eVec.z + N * nVec.z + U * uVec.z,
-        )
-        .normalize();
-      this.absolute = true;
-    } else {
-      // RELATIVE magic-window (no GPS): the aligned look vector, Y-up. Singularity-free; altitude
-      // is real (gravity); the manual drag rotates the whole sky horizontally to match reality.
-      this.targetDir.set(E, U, -N).normalize();
-      this.absolute = false;
-    }
+    const lst = this.lonRad != null ? lstRad(Date.now(), this.lonRad) : null;
+    this.absolute = enuToSkyDir(
+      E0,
+      N0,
+      U0,
+      this.compassSeed + this.azOffsetUser,
+      this.altOffsetUser,
+      this.latRad,
+      lst,
+      this.targetDir,
+    );
     this.hasTarget = true;
   }
 }
