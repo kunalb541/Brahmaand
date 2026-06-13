@@ -305,8 +305,13 @@ export class ObjectPanel {
           .map(
             ([k, label]) =>
               `<figure style="flex:1;margin:0;min-width:0">` +
+              `<div style="position:relative">` +
               `<img src="${t.stamps![k]}" loading="lazy" alt="${label}" style="display:block;width:100%;aspect-ratio:1;` +
               `object-fit:cover;border-radius:6px;background:#000${k === 'difference' ? ';border:1px solid rgba(111,227,255,.55)' : ''}">` +
+              // reticle marking the candidate at the stamp centre — same object as the light curve
+              `<div style="position:absolute;left:50%;top:50%;width:30%;height:30%;transform:translate(-50%,-50%);` +
+              `border:1.5px solid #6fe3ff;border-radius:50%;box-shadow:0 0 4px #6fe3ff;pointer-events:none"></div>` +
+              `</div>` +
               `<figcaption style="font-size:9px;color:${k === 'difference' ? '#6fe3ff' : '#7f93b5'};text-align:center;margin-top:2px">${label}</figcaption>` +
               `</figure>`,
           )

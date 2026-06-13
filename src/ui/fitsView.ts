@@ -37,10 +37,19 @@ export function createFitsView(opts: {
   head.appendChild(stretchWrap);
   root.appendChild(head);
 
+  // canvas in a relative wrapper so a centre reticle (the selected object) can overlay it
+  const canvasWrap = document.createElement('div');
+  canvasWrap.style.cssText = 'position:relative;margin-top:6px';
   const canvas = document.createElement('canvas');
   canvas.style.cssText =
-    'display:block;width:100%;margin-top:6px;border-radius:6px;background:#000;aspect-ratio:1;image-rendering:pixelated;cursor:crosshair;touch-action:none';
-  root.appendChild(canvas);
+    'display:block;width:100%;border-radius:6px;background:#000;aspect-ratio:1;image-rendering:pixelated;cursor:crosshair;touch-action:none';
+  canvasWrap.appendChild(canvas);
+  const reticle = document.createElement('div');
+  reticle.style.cssText =
+    'position:absolute;left:50%;top:50%;width:30px;height:30px;margin:-15px 0 0 -15px;border:1.5px solid #6fe3ff;' +
+    'border-radius:50%;box-shadow:0 0 6px #6fe3ff,inset 0 0 4px #6fe3ff;pointer-events:none';
+  canvasWrap.appendChild(reticle);
+  root.appendChild(canvasWrap);
 
   const readout = document.createElement('div');
   readout.style.cssText = 'margin-top:5px;font:10px ui-monospace,monospace;color:#cfe3ff;min-height:24px;line-height:1.3';
