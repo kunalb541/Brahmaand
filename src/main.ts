@@ -7,6 +7,7 @@ import { LookControls } from './core/lookControls';
 import { createSkySphere } from './sky/skySphere';
 import { HipsLayer } from './sky/hips/hipsLayer';
 import { createConstellationLines } from './sky/constellations';
+import { createEquatorialGrid, createEquator, createEcliptic, createGalacticEquator } from './sky/grids';
 import { StarLabels } from './sky/starLabels';
 import { StarField } from './stars/starField';
 import { TransientLayer } from './sky/transientLayer';
@@ -140,6 +141,23 @@ toggleStars.addEventListener('click', () => {
   starLabelsOn = toggleStars.classList.toggle('active');
 });
 
+// reference grids & lines (Stellarium-style) — accurate great/small circles on the sphere
+const equGrid = createEquatorialGrid();
+const equator = createEquator();
+const ecliptic = createEcliptic();
+const galactic = createGalacticEquator();
+const gridGroup = new THREE.Group();
+gridGroup.add(equGrid, equator, ecliptic, galactic);
+scene.add(gridGroup);
+const gridOn = { equ: false, ecl: false, gal: false };
+const wireGrid = (id: string, key: keyof typeof gridOn) => {
+  const btn = document.getElementById(id) as HTMLButtonElement;
+  btn.addEventListener('click', () => (gridOn[key] = btn.classList.toggle('active')));
+};
+wireGrid('toggle-grid', 'equ');
+wireGrid('toggle-ecliptic', 'ecl');
+wireGrid('toggle-galactic', 'gal');
+
 // --- 3D star field + fly controls ---
 // Gaia DR3 (638k) is the deep field; HYG patches the very brightest naked-eye stars that
 // Gaia's ruwe/parallax cuts exclude (Sirius, Vega, …). Both render with one shared exposure.
@@ -173,8 +191,35 @@ const toolsRow = document.createElement('div');
 toolsRow.className = 'row';
 toolsRow.innerHTML =
   '<button id="return-earth">⌂ Return to Earth</button>' +
-  '<button id="share-view" title="copy a link to this exact view">⌁ Share</button>';
+  '<button id="share-view" title="copy a link to this exact view">⌁ Share</button>' +
+  '<button id="toggle-fov" title="Field-of-view framing circle (cycles common eyepiece/detector sizes)">⊕ FOV</button>';
 document.getElementById('sec-tools')!.appendChild(toolsRow);
+
+// FOV framing tool: a centred circle of a chosen TRUE angular diameter, scaling with zoom — frames
+// an eyepiece / detector / finder field (a Stellarium "ocular"-style aid). Cycles preset sizes.
+const fovPresets: { deg: number; label: string }[] = [
+  { deg: 5, label: '5° finder' },
+  { deg: 1, label: '1°' },
+  { deg: 0.5, label: '30′' },
+  { deg: 0.25, label: '15′ eyepiece' },
+  { deg: 1 / 12, label: '5′ detector' },
+];
+let fovIdx = -1; // -1 = off
+const fovRing = document.createElement('div');
+fovRing.style.cssText =
+  'position:absolute;left:50%;top:50%;border:1.5px solid rgba(111,227,255,.8);border-radius:50%;' +
+  'box-shadow:0 0 8px rgba(111,227,255,.4);pointer-events:none;display:none;transform:translate(-50%,-50%)';
+const fovLabel = document.createElement('div');
+fovLabel.style.cssText =
+  'position:absolute;left:50%;top:50%;margin-top:-2px;transform:translate(-50%,calc(-50% - 0px));' +
+  'pointer-events:none;display:none;color:#9fe0ff;font:11px ui-monospace,monospace;text-shadow:0 0 4px #000';
+document.getElementById('skyspace')!.append(fovRing, fovLabel);
+document.getElementById('toggle-fov')!.addEventListener('click', () => {
+  fovIdx = fovIdx >= fovPresets.length - 1 ? -1 : fovIdx + 1;
+  const btn = document.getElementById('toggle-fov')!;
+  btn.classList.toggle('active', fovIdx >= 0);
+  btn.textContent = fovIdx < 0 ? '⊕ FOV' : `⊕ ${fovPresets[fovIdx]!.label}`;
+});
 (document.getElementById('exposure') as HTMLInputElement).addEventListener('input', (e) => {
   const stops = parseFloat((e.target as HTMLInputElement).value);
   for (const sf of starFields) sf.setExposure(stops);
@@ -713,6 +758,24 @@ startLoop(renderer, (dt) => {
       constellations.position.copy(rig.position);
       (constellations.material as THREE.LineBasicMaterial).opacity = 0.55 * f;
       constellations.visible = constellationsOn && f > 0.02;
+    }
+    // reference grids/lines: pinned to the sky, shown only in the planetarium (Earth) view
+    gridGroup.position.copy(rig.position);
+    gridGroup.visible = f > 0.4 && (gridOn.equ || gridOn.ecl || gridOn.gal);
+    equGrid.visible = equator.visible = gridOn.equ;
+    ecliptic.visible = gridOn.ecl;
+    galactic.visible = gridOn.gal;
+
+    // FOV framing circle: pixel diameter = (target° / vertical-FOV°) × viewport height
+    if (fovIdx >= 0 && nearEarth) {
+      const px = (fovPresets[fovIdx]!.deg / controls.fovDeg) * canvas.clientHeight;
+      fovRing.style.width = fovRing.style.height = `${px}px`;
+      fovRing.style.display = 'block';
+      fovLabel.style.marginTop = `${-px / 2 - 15}px`;
+      fovLabel.textContent = fovPresets[fovIdx]!.label;
+      fovLabel.style.display = 'block';
+    } else if (fovRing.style.display !== 'none') {
+      fovRing.style.display = fovLabel.style.display = 'none';
     }
     starLabels.setVisible(starLabelsOn && f > 0.6);
 
