@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
-import { deviceLookEnu, enuToSkyDir } from './deviceSky';
+import { deviceLookEnu, enuToSkyDir, buildSkyQuat } from './deviceSky';
 import { raDecToWorld, worldToRaDec } from '../math/frames';
 
 const DEG = Math.PI / 180;
@@ -96,6 +96,37 @@ describe('deviceSky — sky registration (singularity-free)', () => {
     expect(out.y).toBeCloseTo(1, 5); // up is up (gravity)
     enuToSkyDir(0, 1, 0, 0, 0, null, null, out); // north horizon, no align
     expect(out.y).toBeCloseTo(0, 5); // on the horizon
+  });
+
+  it('buildSkyQuat look direction matches the proven vector reference', () => {
+    const q = new THREE.Quaternion();
+    const dirRef = new THREE.Vector3();
+    for (let a = 0; a < 360; a += 45) {
+      for (let b = 0; b <= 160; b += 40) {
+        buildSkyQuat(a * DEG, b * DEG, 0, 0, 0, LAT, LST, q);
+        const look = new THREE.Vector3(0, 0, -1).applyQuaternion(q); // camera −Z
+        const enu = deviceLookEnu(a * DEG, b * DEG, 0, 0);
+        enuToSkyDir(enu.E, enu.N, enu.U, 0, 0, LAT, LST, dirRef);
+        expect(look.angleTo(dirRef) * (180 / Math.PI)).toBeLessThan(0.01);
+      }
+    }
+  });
+
+  it('buildSkyQuat: the camera quaternion stays continuous through the real usage envelope', () => {
+    // realistic magic-window motion: pan a full circle, and tilt from the horizon up toward the
+    // zenith (beta ~10..88) — the way you actually hold a phone to the sky. No spin/flip.
+    const q = new THREE.Quaternion();
+    let prev: THREE.Quaternion | null = null;
+    let maxStep = 0;
+    const step = (a: number, b: number) => {
+      buildSkyQuat(a, b, 0, 0, 0, LAT, LST, q);
+      if (prev) maxStep = Math.max(maxStep, prev.angleTo(q) * (180 / Math.PI));
+      prev = q.clone();
+    };
+    for (let a = 0; a <= 360; a += 4) step(a * DEG, 55 * DEG); // full pan (one continuous sweep)
+    prev = null; // new gesture — don't measure the jump between the two separate motions
+    for (let b = 10; b <= 88; b += 2) step(140 * DEG, b * DEG); // tilt up toward the zenith
+    expect(maxStep).toBeLessThan(6); // each small device step → small quaternion step, no spin/flip
   });
 
   it('deviceLookEnu tracks tilt continuously + monotonically (no jumps while moving)', () => {

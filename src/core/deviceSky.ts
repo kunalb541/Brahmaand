@@ -3,75 +3,58 @@ import type { LookControls } from './lookControls';
 import { raDecToWorld } from '../math/frames';
 
 /**
- * Phone "magic window": move the phone and the view follows the real sky.
+ * Phone "magic window": move the phone and the view follows the real sky — the way Stellarium
+ * Mobile / Sky Map / three.js DeviceOrientationControls do it.
  *
- * Two modes, picked automatically:
+ * APPROACH (one mode, smooth AND accurate — no toggles):
+ *  1. Each `deviceorientation` event builds the FULL device camera quaternion (with roll) from
+ *     (alpha,beta,gamma) + screen orientation — the canonical DeviceOrientationControls composition.
+ *  2. That device quaternion is composed with a WORLD-ALIGN quaternion (built from the observer's
+ *     latitude + Local Sidereal Time + a one-time compass north seed + the user's drag-align) that
+ *     rotates the device's gravity frame onto the real celestial sphere. No azimuth/altitude
+ *     decomposition anywhere → singularity-free, never spins (even at the zenith).
+ *  3. The render loop SLERPs the camera quaternion toward that target every frame with a single
+ *     time constant — slerp is itself a low-pass, so it's smooth without lag and responsive without
+ *     jitter. The phone owns the camera's full orientation (incl. roll); LookControls keeps zoom.
  *
- *  • ABSOLUTE (GPS) — maps the device look VECTOR straight into the celestial frame: the
- *    gravity-referenced horizon vector (East/North/Up) is recombined from three world basis
- *    directions (east-horizon / north-horizon / zenith) built from your latitude + Local Sidereal
- *    Time. Because it's a linear vector transform (no azimuth/altitude decomposition) it is
- *    SINGULARITY-FREE — it never spins, even pointing at the zenith — and it tracks the sky's
- *    rotation over time. North is anchored by a ONE-TIME compass seed (captured when the phone is
- *    roughly level) plus the user's persistent drag-alignment; the compass is never fed
- *    continuously (its jitter, plus the old az/alt gimbal, was what made the view spin).
- *
- *  • RELATIVE (no GPS) — the same aligned look vector without sky registration: tracks how you move
- *    the phone, altitude is real (gravity), and a drag rotates the whole sky to match reality.
- *
- * SMOOTHNESS (Star-Walk-like): each sensor event only writes a TARGET orientation; `update(dt)`
- * (render loop) slerps the camera toward it with a 1-Euro adaptive cutoff (heavy smoothing when
- * still, responsive when moving) + a deadband that holds rock-steady at rest. See PRESETS / update().
- *
- * Calibration: ALTITUDE is exact (gravity). AZIMUTH north is unreliable per device, so the user
- * drag-aligns once (persisted). `AZ_SIGN` flips the compass-seed handedness if the initial guess
- * is mirrored; the drag-align corrects any residual offset.
+ * Without GPS it falls back to a relative window (tracks motion, altitude real from gravity; a drag
+ * rotates the whole sky to match reality). Compass is reliable per-device only as a one-time north
+ * seed; the persistent drag-align corrects any residual rotation.
  */
 
-// --- azimuth calibration knobs (only these may need a tweak after an on-device sky check) ---
-const AZ_SIGN = 1; // flip to -1 if the view turns the wrong way horizontally
-const AZ_OFFSET_DEG = 0; // add a constant if north is consistently off by a fixed angle
-
-// --- smoothing presets (1-Euro-style adaptive filter) ---
-// fcMin = cutoff (Hz) when the phone is still → low = heavy smoothing, kills jitter.
-// beta  = how fast the cutoff rises with angular speed → responsiveness when you actually move.
-// deadbandDeg = ignore target changes below this when nearly still → no micro-vibration at rest.
-// compassLp = low-pass weight for the gyro→north offset (smaller = steadier heading).
-export type SmoothMode = 'smooth' | 'accurate';
-const PRESETS: Record<SmoothMode, { fcMin: number; beta: number; deadbandDeg: number; compassLp: number }> = {
-  smooth: { fcMin: 0.6, beta: 4, deadbandDeg: 0.25, compassLp: 0.03 }, // public default — stable
-  accurate: { fcMin: 1.6, beta: 8, deadbandDeg: 0.08, compassLp: 0.06 }, // pro — snappier
-};
+// Flip if azimuth comes out mirrored on a given device (move right → sky goes left).
+const AZ_SIGN = 1;
+const AZ_OFFSET_DEG = 0;
+// Slerp time constant (s): smaller = snappier, larger = smoother. ~0.07 s is both.
+const SLERP_TAU = 0.07;
 
 const DEG2RAD = Math.PI / 180;
-const RAD2DEG = 180 / Math.PI;
-const TAU = Math.PI * 2;
 
 const zee = new THREE.Vector3(0, 0, 1);
+const upY = new THREE.Vector3(0, 1, 0);
 const euler = new THREE.Euler();
 const q0 = new THREE.Quaternion();
 const q1 = new THREE.Quaternion(-Math.sqrt(0.5), 0, 0, Math.sqrt(0.5)); // -90° about X: look out the back
-const quat = new THREE.Quaternion();
+const qDev = new THREE.Quaternion();
+const qAlign = new THREE.Quaternion();
+const qYaw = new THREE.Quaternion();
+const mat = new THREE.Matrix4();
 const look = new THREE.Vector3();
-const look2 = new THREE.Vector3();
-const eVec = new THREE.Vector3(); // East-horizon-point direction in the celestial world frame
-const nVec = new THREE.Vector3(); // North-horizon-point direction
-const uVec = new THREE.Vector3(); // Zenith direction
+const eVec = new THREE.Vector3();
+const nVec = new THREE.Vector3();
+const uVec = new THREE.Vector3();
+const eRot = new THREE.Vector3();
+const nNeg = new THREE.Vector3();
 
-/** Build a roll-free camera orientation quaternion that looks along (yaw,pitch). */
-function quatFromYawPitch(yaw: number, pitch: number, out: THREE.Quaternion): void {
-  out.setFromEuler(euler.set(pitch, yaw, 0, 'YXZ'));
-}
-
+/** Canonical DeviceOrientationControls quaternion (camera looks out the back of the phone). */
 function deviceQuaternion(alpha: number, beta: number, gamma: number, orient: number): THREE.Quaternion {
   euler.set(beta, alpha, -gamma, 'YXZ');
-  quat.setFromEuler(euler);
-  quat.multiply(q1);
-  quat.multiply(q0.setFromAxisAngle(zee, -orient));
-  return quat;
+  qDev.setFromEuler(euler);
+  qDev.multiply(q1);
+  qDev.multiply(q0.setFromAxisAngle(zee, -orient));
+  return qDev;
 }
 
-/** Greenwich Mean Sidereal Time (radians) for a Unix-ms instant (IAU 1982, good to ~1″). */
 function gmstRad(unixMs: number): number {
   const jd = unixMs / 86400000 + 2440587.5;
   const d = jd - 2451545.0;
@@ -80,8 +63,6 @@ function gmstRad(unixMs: number): number {
   deg = ((deg % 360) + 360) % 360;
   return deg * DEG2RAD;
 }
-
-/** Local Sidereal Time (radians) at east-positive longitude `lonRad`. */
 function lstRad(unixMs: number, lonRad: number): number {
   return gmstRad(unixMs) + lonRad;
 }
@@ -101,9 +82,7 @@ export function deviceLookEnu(
 /**
  * Aligned horizon vector (E0,N0,U0) → a world look direction. With lat + LST it maps onto the real
  * celestial sphere as a LINEAR combination of three basis directions (east-horizon / north-horizon
- * / zenith) — singularity-free, so it never spins, even at the zenith. Without lat/LST it returns
- * the aligned relative look vector. `yaw` rotates about Up (north seed + manual align); `altOffset`
- * tilts about East. Returns true when the absolute (sky-registered) branch was used.
+ * / zenith) — singularity-free. Kept as the proven reference the unit tests pin the math to.
  */
 export function enuToSkyDir(
   E0: number,
@@ -128,25 +107,54 @@ export function enuToSkyDir(
     N = n2;
   }
   if (latRad != null && lst != null) {
-    raDecToWorld(lst + Math.PI / 2, 0, eVec); // east horizon point
-    raDecToWorld(lst, latRad, uVec); // zenith
-    raDecToWorld(lst + Math.PI, Math.PI / 2 - latRad, nVec); // north horizon point
+    raDecToWorld(lst + Math.PI / 2, 0, eVec);
+    raDecToWorld(lst, latRad, uVec);
+    raDecToWorld(lst + Math.PI, Math.PI / 2 - latRad, nVec);
     out
-      .set(
-        E * eVec.x + N * nVec.x + U * uVec.x,
-        E * eVec.y + N * nVec.y + U * uVec.y,
-        E * eVec.z + N * nVec.z + U * uVec.z,
-      )
+      .set(E * eVec.x + N * nVec.x + U * uVec.x, E * eVec.y + N * nVec.y + U * uVec.y, E * eVec.z + N * nVec.z + U * uVec.z)
       .normalize();
     return true;
   }
-  out.set(E, U, -N).normalize(); // relative window, Y-up
+  out.set(E, U, -N).normalize();
+  return false;
+}
+
+/**
+ * Full camera quaternion for the magic window: the device orientation rotated onto the celestial
+ * frame (absolute, lat+lst) or just yaw-aligned (relative). Its look direction (apply to −Z) equals
+ * enuToSkyDir for the same orientation; additionally it carries the correct ROLL. Returns absolute?.
+ */
+export function buildSkyQuat(
+  alpha: number,
+  beta: number,
+  gamma: number,
+  orient: number,
+  yaw: number,
+  latRad: number | null,
+  lst: number | null,
+  out: THREE.Quaternion,
+): boolean {
+  const dev = deviceQuaternion(alpha, beta, gamma, orient);
+  if (latRad != null && lst != null) {
+    // basis vectors of the (yaw-aligned) horizon frame in the celestial world frame
+    raDecToWorld(lst + Math.PI / 2, 0, eVec); // east horizon
+    raDecToWorld(lst, latRad, uVec); // zenith
+    raDecToWorld(lst + Math.PI, Math.PI / 2 - latRad, nVec); // north horizon
+    eRot.copy(eVec).applyAxisAngle(uVec, yaw);
+    nNeg.copy(nVec).applyAxisAngle(uVec, yaw).negate();
+    mat.makeBasis(eRot, uVec, nNeg); // maps device axes (E,U,−N) → celestial
+    qAlign.setFromRotationMatrix(mat);
+    out.copy(qAlign).multiply(dev);
+    return true;
+  }
+  qYaw.setFromAxisAngle(upY, yaw);
+  out.copy(qYaw).multiply(dev);
   return false;
 }
 
 export class DeviceSky {
   enabled = false;
-  /** True once a real-sky (GPS + compass) fix is in use; false = relative magic-window. */
+  /** True once a real-sky (GPS) fix is in use; false = relative magic-window. */
   absolute = false;
   private handler: ((e: DeviceOrientationEvent) => void) | null = null;
   private absHandler: ((e: DeviceOrientationEvent) => void) | null = null;
@@ -154,112 +162,25 @@ export class DeviceSky {
   private latRad: number | null = null;
   private lonRad: number | null = null;
 
-  // Compass → gyro-frame north offset (radians). The flat-pose compass heading is NOT a valid
-  // look azimuth when the phone is raised at the sky (its horizontal projection degenerates),
-  // so we never use it directly: we estimate the constant offset between the gyro frame's
-  // azimuth and true north, sampled ONLY in poses where the compass is meaningful, low-passed,
-  // and then derive the look azimuth from the (continuous) gyro quaternion + this offset.
-  // North seed from the compass — captured ONCE (when ~level), never fed continuously. A live
-  // compass feed is what made the registered sky spin (heading jitter + alt/az gimbal); a single
-  // seed + the user's drag-align is reliable. radians: az = gyroAz + compassSeed + azOffsetUser.
+  // one-time compass north seed (captured when ~level) + the user's persistent drag-align
   private compassSeed = 0;
   private seeded = false;
-
-  // User manual sky-alignment (radians), persisted. Device compasses are unreliable and vary by
-  // model, so — like SkySafari / Stellarium Mobile — the user can DRAG the sky into alignment once
-  // and it sticks. Added on top of the compass-derived offset in ABSOLUTE mode.
   private azOffsetUser = 0;
-  private altOffsetUser = 0;
 
-  // smoothing state: sensor events write `targetDir`; update(dt) slerps the camera toward it.
-  private readonly targetDir = new THREE.Vector3(0, 0, -1);
   private readonly targetQuat = new THREE.Quaternion();
   private readonly smoothQuat = new THREE.Quaternion();
   private hasTarget = false;
   private hasSmooth = false;
 
-  /** Smoothing preset — 'smooth' (default, public) or 'accurate' (pro, snappier). */
-  mode: SmoothMode = 'smooth';
-  /** When true, getStats() returns live numbers for the calibration overlay. */
-  debug = false;
-
-  // --- debug/telemetry (for the calibration overlay) ---
-  private rawA = 0;
-  private rawB = 0;
-  private rawG = 0;
-  private headingDeg: number | null = null;
-  private hz = 0;
-  private lastEvtMs = 0;
-
   constructor(private controls: LookControls) {
     try {
       const s = localStorage.getItem('brahmaand.skycal');
-      if (s) {
-        const c = JSON.parse(s) as { az?: number; alt?: number };
-        this.azOffsetUser = c.az ?? 0;
-        this.altOffsetUser = c.alt ?? 0;
-      }
+      if (s) this.azOffsetUser = (JSON.parse(s) as { az?: number }).az ?? 0;
     } catch {
       /* ignore */
     }
   }
 
-  setMode(m: SmoothMode): void {
-    this.mode = m;
-  }
-
-  /** Manual sky alignment: nudge the registration by (Δaz, Δalt) radians and persist it. */
-  nudgeCal(dAz: number, dAlt: number): void {
-    this.azOffsetUser += dAz;
-    this.altOffsetUser = THREE.MathUtils.clamp(this.altOffsetUser + dAlt, -0.8, 0.8);
-    try {
-      localStorage.setItem('brahmaand.skycal', JSON.stringify({ az: this.azOffsetUser, alt: this.altOffsetUser }));
-    } catch {
-      /* ignore */
-    }
-  }
-
-  /** Clear the manual alignment (back to the compass-derived registration). */
-  resetCal(): void {
-    this.azOffsetUser = 0;
-    this.altOffsetUser = 0;
-    try {
-      localStorage.removeItem('brahmaand.skycal');
-    } catch {
-      /* ignore */
-    }
-  }
-
-  /** True when manual alignment is active (non-zero), for the UI. */
-  get calibrated(): boolean {
-    return this.azOffsetUser !== 0 || this.altOffsetUser !== 0;
-  }
-
-  /** Live filter/sensor telemetry for the calibration overlay. */
-  getStats(): {
-    mode: SmoothMode;
-    absolute: boolean;
-    hz: number;
-    rawDeg: { alpha: number; beta: number; gamma: number };
-    heading: number | null;
-    gps: boolean;
-    yawDeg: number;
-    pitchDeg: number;
-  } {
-    look2.set(0, 0, -1).applyQuaternion(this.smoothQuat);
-    return {
-      mode: this.mode,
-      absolute: this.absolute,
-      hz: this.hz,
-      rawDeg: { alpha: this.rawA, beta: this.rawB, gamma: this.rawG },
-      heading: this.headingDeg,
-      gps: this.latRad != null,
-      yawDeg: Math.atan2(-look2.x, -look2.z) * RAD2DEG,
-      pitchDeg: Math.asin(THREE.MathUtils.clamp(look2.y, -1, 1)) * RAD2DEG,
-    };
-  }
-
-  /** Must be called from a user gesture (iOS requires a motion permission prompt). */
   async enable(): Promise<boolean> {
     const DOE = DeviceOrientationEvent as unknown as { requestPermission?: () => Promise<string> };
     if (typeof DOE.requestPermission === 'function') {
@@ -269,10 +190,8 @@ export class DeviceSky {
         return false;
       }
     }
-    // Best-effort GPS for real-sky registration; relative magic-window if denied/unsupported.
     void this.acquireLocation();
     this.handler = (e) => {
-      // prefer the north-referenced stream once it has been seen (Android)
       if (this.sawAbsoluteEvent) return;
       this.onOrientation(e);
     };
@@ -284,7 +203,7 @@ export class DeviceSky {
     addEventListener('deviceorientationabsolute', this.absHandler as EventListener, true);
     this.enabled = true;
     this.hasTarget = false;
-    this.hasSmooth = false; // snap to the first fix (no whip-pan from a stale direction)
+    this.hasSmooth = false;
     this.seeded = false;
     return true;
   }
@@ -294,11 +213,9 @@ export class DeviceSky {
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         this.latRad = pos.coords.latitude * DEG2RAD;
-        this.lonRad = pos.coords.longitude * DEG2RAD; // east-positive
+        this.lonRad = pos.coords.longitude * DEG2RAD;
       },
-      () => {
-        /* declined/unavailable → stay in relative mode */
-      },
+      () => {},
       { enableHighAccuracy: false, timeout: 8000, maximumAge: 600000 },
     );
   }
@@ -311,100 +228,76 @@ export class DeviceSky {
     this.sawAbsoluteEvent = false;
     this.enabled = false;
     this.absolute = false;
-    this.hasTarget = false;
-    this.hasSmooth = false;
-    this.seeded = false;
+    this.controls.setExternalQuaternion(null);
+    this.controls.syncFromCamera(); // keep the view where it is — no snap
   }
 
-  /**
-   * Ease the displayed direction toward the latest sensor target. Call once per rendered frame
-   * (BEFORE controls.update) with the frame delta-time in seconds.
-   */
+  /** Manual sky alignment: rotate the registration about the zenith (drag) and persist it. */
+  nudgeCal(dAz: number): void {
+    this.azOffsetUser += dAz;
+    try {
+      localStorage.setItem('brahmaand.skycal', JSON.stringify({ az: this.azOffsetUser }));
+    } catch {
+      /* ignore */
+    }
+  }
+  resetCal(): void {
+    this.azOffsetUser = 0;
+    try {
+      localStorage.removeItem('brahmaand.skycal');
+    } catch {
+      /* ignore */
+    }
+  }
+  get calibrated(): boolean {
+    return this.azOffsetUser !== 0;
+  }
+
+  /** Render-loop tick: slerp the camera quaternion toward the latest target (smooth + responsive). */
   update(dt: number): void {
     if (!this.enabled || !this.hasTarget || dt <= 0) return;
-
-    // target as a roll-free orientation quaternion (camera is yaw/pitch only)
-    const tPitch = Math.asin(THREE.MathUtils.clamp(this.targetDir.y, -1, 1));
-    const tYaw = Math.atan2(-this.targetDir.x, -this.targetDir.z);
-    quatFromYawPitch(tYaw, tPitch, this.targetQuat);
-
     if (!this.hasSmooth) {
-      this.smoothQuat.copy(this.targetQuat); // snap to first fix — no whip-pan
+      this.smoothQuat.copy(this.targetQuat);
       this.hasSmooth = true;
     } else {
-      const cfg = PRESETS[this.mode];
-      const ang = this.smoothQuat.angleTo(this.targetQuat); // radians of remaining motion
-      // Jitter rejection: when essentially still, hold rock-steady (kills micro-vibration).
-      if (ang > cfg.deadbandDeg * DEG2RAD) {
-        // 1-Euro-style adaptive cutoff: smooth when slow, responsive when fast.
-        const speed = ang / dt; // rad/s — how fast the target is moving right now
-        const fc = cfg.fcMin + cfg.beta * speed; // Hz
-        const tau = 1 / (TAU * fc); // filter time constant
-        const alpha = THREE.MathUtils.clamp(dt / (tau + dt), 0, 1); // dt-corrected
-        this.smoothQuat.slerp(this.targetQuat, alpha); // true shortest-path interpolation
-      }
+      const alpha = 1 - Math.exp(-dt / SLERP_TAU); // dt-corrected; same feel at any frame rate
+      this.smoothQuat.slerp(this.targetQuat, alpha);
     }
-    // drive the camera from the smoothed orientation
-    look2.set(0, 0, -1).applyQuaternion(this.smoothQuat);
-    const pitch = Math.asin(THREE.MathUtils.clamp(look2.y, -1, 1));
-    const yaw = Math.atan2(-look2.x, -look2.z);
-    this.controls.setYawPitch(yaw, pitch);
+    this.controls.setExternalQuaternion(this.smoothQuat);
   }
 
   private onOrientation(e: DeviceOrientationEvent): void {
     if (e.alpha == null || e.beta == null || e.gamma == null) return;
-    // telemetry: raw angles + measured event rate (sensor events arrive irregularly)
-    this.rawA = e.alpha;
-    this.rawB = e.beta;
-    this.rawG = e.gamma;
-    const nowMs = Date.now();
-    if (this.lastEvtMs) {
-      const inst = 1000 / Math.max(1, nowMs - this.lastEvtMs);
-      this.hz = this.hz ? this.hz * 0.9 + inst * 0.1 : inst; // smoothed Hz
-    }
-    this.lastEvtMs = nowMs;
+    const orient =
+      ((screen.orientation?.angle ?? (window as unknown as { orientation?: number }).orientation ?? 0) * Math.PI) / 180;
 
-    const orient = ((screen.orientation?.angle ?? (window as unknown as { orientation?: number }).orientation ?? 0) *
-      Math.PI) /
-      180;
-    // gravity-referenced look as horizon ENU (pure; same path the unit tests drive)
-    const { E: E0, N: N0, U: U0 } = deviceLookEnu(
+    // compass heading (deg cw from true north): iOS webkitCompassHeading, Android absolute alpha
+    const ev = e as DeviceOrientationEvent & { webkitCompassHeading?: number; absolute?: boolean };
+    let headingDeg: number | null = null;
+    if (typeof ev.webkitCompassHeading === 'number' && isFinite(ev.webkitCompassHeading)) headingDeg = ev.webkitCompassHeading;
+    else if (ev.absolute) headingDeg = (360 - e.alpha) % 360;
+
+    // ONE-TIME north seed when ~level (look azimuth ≈ compass heading); never fed continuously.
+    if (!this.seeded && headingDeg != null) {
+      const enu = deviceLookEnu(e.alpha * DEG2RAD, e.beta * DEG2RAD, e.gamma * DEG2RAD, orient);
+      if (Math.abs(enu.U) < 0.5) {
+        const trueAz = (AZ_SIGN * headingDeg + AZ_OFFSET_DEG) * DEG2RAD;
+        this.compassSeed = trueAz - Math.atan2(enu.E, enu.N);
+        this.seeded = true;
+      }
+    }
+
+    const yaw = this.compassSeed + this.azOffsetUser;
+    const lst = this.lonRad != null ? lstRad(Date.now(), this.lonRad) : null;
+    this.absolute = buildSkyQuat(
       e.alpha * DEG2RAD,
       e.beta * DEG2RAD,
       e.gamma * DEG2RAD,
       orient,
-    );
-
-    // Compass heading (deg clockwise from true north): iOS exposes webkitCompassHeading;
-    // Android's absolute stream has north-referenced alpha (0 = north, counter-clockwise).
-    const ev = e as DeviceOrientationEvent & { webkitCompassHeading?: number; absolute?: boolean };
-    let headingDeg: number | null = null;
-    if (typeof ev.webkitCompassHeading === 'number' && isFinite(ev.webkitCompassHeading)) {
-      headingDeg = ev.webkitCompassHeading;
-    } else if (ev.absolute) {
-      headingDeg = (360 - e.alpha) % 360;
-    }
-    this.headingDeg = headingDeg;
-
-    // ONE-TIME north seed: when the phone is roughly level the look azimuth ≈ the compass heading,
-    // so capture the constant gyro→true-north offset once. We never feed the compass after that
-    // (continuous heading jitter + the azimuth gimbal near the zenith were what made it spin).
-    if (!this.seeded && headingDeg != null && Math.abs(U0) < 0.5) {
-      const trueAz = (AZ_SIGN * headingDeg + AZ_OFFSET_DEG) * DEG2RAD;
-      this.compassSeed = trueAz - Math.atan2(E0, N0);
-      this.seeded = true;
-    }
-
-    const lst = this.lonRad != null ? lstRad(Date.now(), this.lonRad) : null;
-    this.absolute = enuToSkyDir(
-      E0,
-      N0,
-      U0,
-      this.compassSeed + this.azOffsetUser,
-      this.altOffsetUser,
+      yaw,
       this.latRad,
       lst,
-      this.targetDir,
+      this.targetQuat,
     );
     this.hasTarget = true;
   }

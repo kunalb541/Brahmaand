@@ -161,7 +161,35 @@ export class LookControls {
     this.clampPitch();
   }
 
+  // External-orientation handoff: the phone magic-window owns the camera's full quaternion (with
+  // roll) while active; LookControls still applies zoom (FOV) so pinch keeps working.
+  private externalQuat: THREE.Quaternion | null = null;
+
+  /** Hand orientation to an external driver (gyro). Pass null to take control back. */
+  setExternalQuaternion(q: THREE.Quaternion | null): void {
+    this.externalQuat = q;
+  }
+
+  /** Sync yaw/pitch from the current camera look (so releasing gyro doesn't snap the view). */
+  syncFromCamera(): void {
+    this.targetDir.set(0, 0, -1).applyQuaternion(this.camera.quaternion);
+    this.pitch = Math.asin(THREE.MathUtils.clamp(this.targetDir.y, -1, 1));
+    this.yaw = Math.atan2(-this.targetDir.x, -this.targetDir.z);
+    this.velYaw = this.velPitch = 0;
+    this.animating = false;
+    this.clampPitch();
+  }
+
   update(dt: number): void {
+    if (this.externalQuat) {
+      // gyro owns orientation (full quaternion incl. roll); we only manage zoom here.
+      this.camera.quaternion.copy(this.externalQuat);
+      if (this.camera.fov !== this.fovDeg) {
+        this.camera.fov = this.fovDeg;
+        this.camera.updateProjectionMatrix();
+      }
+      return;
+    }
     if (this.animating && !this.dragging) {
       this.animT = Math.min(1, this.animT + dt / this.animDur);
       const e = this.animT * this.animT * (3 - 2 * this.animT); // smoothstep

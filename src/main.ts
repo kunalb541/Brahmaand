@@ -410,9 +410,6 @@ const isTouch = matchMedia('(pointer: coarse)').matches; // (controls guide live
 
 // --- Touch controls (phones/tablets): a fly joystick + a gyro "move phone to look" toggle ---
 const deviceSky = new DeviceSky(controls);
-deviceSky.setMode('smooth'); // everyone starts on the stablest setting; pros can switch to Accurate
-onModeChange(() => { if (!isPro()) deviceSky.setMode('smooth'); }); // public is always Smooth
-let calibEl: HTMLDivElement | null = null; // calibration overlay (updated in the render loop)
 if (isTouch) {
   // gyro toggle — lives INSIDE the sky area (#skyspace), so it can never cover the bars
   const gyroBtn = document.createElement('button');
@@ -457,40 +454,6 @@ if (isTouch) {
     }
   });
 
-  // Smooth ⇄ Accurate toggle (Star Walk-style stability vs. responsiveness). Long-press it to
-  // open the calibration overlay (raw vs. filtered orientation, update rate, GPS/compass).
-  const smoothBtn = document.createElement('button');
-  const updateSmoothBtn = () => (smoothBtn.textContent = deviceSky.mode === 'smooth' ? '🪶 Smooth' : '🎯 Accurate');
-  smoothBtn.style.cssText =
-    'position:absolute;left:50%;transform:translateX(-50%);bottom:46px;' +
-    'font:11px ui-monospace,monospace;color:#dcebff;background:rgba(40,70,130,.5);border:1px solid rgba(120,170,255,.3);' +
-    'border-radius:14px;padding:4px 12px';
-  updateSmoothBtn();
-  document.getElementById('skyspace')!.appendChild(smoothBtn);
-  smoothBtn.addEventListener('click', () => {
-    deviceSky.setMode(deviceSky.mode === 'smooth' ? 'accurate' : 'smooth');
-    updateSmoothBtn();
-  });
-  // calibration overlay (long-press the Smooth/Accurate pill to toggle)
-  calibEl = document.createElement('div');
-  calibEl.style.cssText =
-    'position:absolute;left:8px;top:8px;display:none;z-index:6;pointer-events:none;white-space:pre;' +
-    'font:10px ui-monospace,monospace;color:#9fe0c0;background:rgba(4,8,16,.78);border:1px solid rgba(120,170,255,.25);border-radius:8px;padding:7px 9px';
-  document.getElementById('skyspace')!.appendChild(calibEl);
-  let lpTimer: ReturnType<typeof setTimeout> | null = null;
-  const startLp = () => {
-    lpTimer = setTimeout(() => {
-      deviceSky.debug = !deviceSky.debug;
-      calibEl!.style.display = deviceSky.debug ? 'block' : 'none';
-    }, 550);
-  };
-  const cancelLp = () => {
-    if (lpTimer) clearTimeout(lpTimer);
-    lpTimer = null;
-  };
-  smoothBtn.addEventListener('pointerdown', startLp);
-  smoothBtn.addEventListener('pointerup', cancelLp);
-  smoothBtn.addEventListener('pointerleave', cancelLp);
 
   // fly joystick (bottom-left of the sky area): drag the nub → fly.touchFwd / touchStrafe
   const pad = document.createElement('div');
@@ -829,7 +792,6 @@ let downT = 0;
 // Manual sky-alignment: while phone sky-lock is active, dragging the sky NUDGES the registration
 // (device compasses are unreliable; align once, it persists) instead of doing nothing.
 let calDragX = 0;
-let calDragY = 0;
 let calDragging = false;
 canvas.addEventListener('pointerdown', (e) => {
   downX = e.clientX;
@@ -838,15 +800,13 @@ canvas.addEventListener('pointerdown', (e) => {
   if (deviceSky.enabled && deviceSky.absolute) {
     calDragging = true;
     calDragX = e.clientX;
-    calDragY = e.clientY;
   }
 });
 canvas.addEventListener('pointermove', (e) => {
   if (!calDragging) return;
   const radPerPx = (controls.fovDeg * DEG2RAD) / Math.max(1, window.innerHeight);
-  deviceSky.nudgeCal(-(e.clientX - calDragX) * radPerPx, (e.clientY - calDragY) * radPerPx);
+  deviceSky.nudgeCal(-(e.clientX - calDragX) * radPerPx); // horizontal drag → rotate sky about zenith
   calDragX = e.clientX;
-  calDragY = e.clientY;
 });
 const endCalDrag = () => (calDragging = false);
 canvas.addEventListener('pointerup', endCalDrag);
@@ -1168,17 +1128,8 @@ startLoop(renderer, (dt) => {
     const hudTick = hudAccum >= 0.1;
     if (hudTick) hudAccum = 0;
 
-    deviceSky.update(dt); // ease toward the latest gyro/compass fix (smooth, Star-Walk-like)
-    if (hudTick && deviceSky.debug && calibEl) {
-      const s = deviceSky.getStats();
-      calibEl.textContent =
-        `mode ${s.mode}  ${s.absolute ? '📡 sky-locked' : '📱 relative'}\n` +
-        `rate ${s.hz.toFixed(0)} Hz   GPS ${s.gps ? 'yes' : 'no'}\n` +
-        `raw  α${s.rawDeg.alpha.toFixed(0)} β${s.rawDeg.beta.toFixed(0)} γ${s.rawDeg.gamma.toFixed(0)}\n` +
-        `view yaw ${s.yawDeg.toFixed(1)}  pitch ${s.pitchDeg.toFixed(1)}\n` +
-        `compass ${s.heading == null ? '—' : s.heading.toFixed(0) + '°'}`;
-    }
-    if (!renderer.xr.isPresenting) controls.update(dt);
+    deviceSky.update(dt); // slerp the camera toward the latest device orientation (sets external quat)
+    if (!renderer.xr.isPresenting) controls.update(dt); // applies the external quat (or normal look) + zoom
     fly.update(dt);
     xrInput.update(dt);
 
