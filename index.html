@@ -17,16 +17,23 @@
         --text-dim: #7f93b5;
         --text-faint: #5f7494;
         --accent: #9cc4ff;
-        --btn: rgba(40, 70, 130, 0.45);
-        --btn-active: rgba(90, 140, 230, 0.7);
+        --btn: rgba(255, 255, 255, 0.06);
+        --btn-hover: rgba(255, 255, 255, 0.12);
+        --btn-active: rgba(124, 155, 255, 0.22);
+        --glow: rgba(124, 155, 255, 0.55);
+        --r-pill: 999px;
+        --r-md: 12px;
+        --r-sm: 8px;
+        --t: 0.15s cubic-bezier(.4, 0, .2, 1);
         --sat: env(safe-area-inset-top, 0px);
         --sab: env(safe-area-inset-bottom, 0px);
         --sal: env(safe-area-inset-left, 0px);
         --sar: env(safe-area-inset-right, 0px);
       }
       html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
-      body { font-family: ui-monospace, "SF Mono", Menlo, monospace; color: var(--text); }
+      body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--text); }
       canvas { display: block; }
+      .mono, #readout, #bottombar, #timebar, #time-display { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
 
       /* ---- App frame: fixed regions (top bar / mid row / bottom bar). UI panels are grid/flex
              children of the frame, so they CANNOT overlap each other by construction — the only
@@ -50,18 +57,26 @@
       #brand small { color: var(--text-faint); font-weight: 400; }
       #search-slot { flex: 1; display: flex; min-width: 60px; max-width: 420px; }
       #search-slot input {
-        width: 100%; font: 12px ui-monospace, monospace; color: #dcebff;
-        background: rgba(0, 0, 0, 0.35); border: 1px solid var(--line-strong);
-        border-radius: 7px; padding: 5px 9px; outline: none;
+        width: 100%; font: 12.5px system-ui, sans-serif; color: #eaf1ff;
+        background: rgba(255, 255, 255, 0.06); border: 1px solid var(--line-strong);
+        border-radius: var(--r-pill); padding: 6px 13px; outline: none; transition: border-color var(--t), background var(--t);
       }
-      #search-slot input:focus { border-color: var(--accent); }
+      #search-slot input::placeholder { color: var(--text-dim); }
+      #search-slot input:focus { border-color: var(--accent); background: rgba(255, 255, 255, 0.09); }
       #topbar-actions { margin-left: auto; display: flex; gap: 6px; align-items: center; }
       #topbar button, #dock button, #rightpanel button {
-        font: 11px ui-monospace, monospace; cursor: pointer; color: #dcebff;
-        background: var(--btn); border: 1px solid var(--line-strong);
-        border-radius: 6px; padding: 4px 8px; white-space: nowrap;
+        font: 600 11.5px system-ui, sans-serif; cursor: pointer; color: var(--text);
+        background: var(--btn); border: 1px solid transparent;
+        border-radius: var(--r-pill); padding: 5px 11px; white-space: nowrap;
+        transition: background var(--t), border-color var(--t), box-shadow var(--t), transform var(--t);
       }
-      #topbar button.active, #dock button.active { background: var(--btn-active); border-color: var(--accent); }
+      #topbar button:hover, #dock button:hover, #rightpanel button:hover { background: var(--btn-hover); }
+      #topbar button:active, #dock button:active, #rightpanel button:active { transform: translateY(1px); }
+      #topbar button.active, #dock button.active {
+        background: var(--btn-active); border-color: var(--glow); color: #eaf1ff;
+        box-shadow: 0 0 14px -4px var(--glow), inset 0 0 0 1px rgba(124,155,255,.35);
+      }
+      #topbar button:focus-visible, #dock button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
       #dock-burger { display: none; }
 
       /* ---- Mid row: dock | sky | right panel ---- */
@@ -83,8 +98,23 @@
       #dock h2::after { content: '▾'; margin-left: auto; color: var(--text-faint); transition: transform .15s; }
       #dock section.closed h2::after { transform: rotate(-90deg); }
       #dock section.closed .sec-body { display: none; }
-      #dock .row { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 6px; }
+      #dock .row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
       #dock label { font-size: 11px; color: var(--text); }
+
+      /* Survey switcher: a horizontal chip strip (scrolls, no wrap) with a wavelength-band dot —
+         one tap = swap the telescope, the active one glows. Much cleaner than a grid of boxes. */
+      #surveys {
+        display: flex; gap: 6px; margin-top: 6px; overflow-x: auto; padding-bottom: 4px;
+        scroll-snap-type: x proximity; scrollbar-width: thin; -webkit-overflow-scrolling: touch;
+      }
+      #surveys::-webkit-scrollbar { height: 5px; }
+      #surveys::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 999px; }
+      #surveys button {
+        flex: 0 0 auto; scroll-snap-align: start; display: inline-flex; align-items: center; gap: 6px;
+      }
+      #surveys button .band {
+        width: 7px; height: 7px; border-radius: 50%; flex: none; box-shadow: 0 0 5px currentColor;
+      }
 
       #skyspace { flex: 1; position: relative; pointer-events: none; min-width: 0; }
       #skyspace > * { pointer-events: auto; }
@@ -109,10 +139,11 @@
       }
       #timebar button {
         font: inherit; font-size: 11px; cursor: pointer; color: #dcebff;
-        background: rgba(40, 70, 130, 0.45); border: 1px solid rgba(120, 170, 255, 0.3);
-        border-radius: 6px; padding: 2px 8px;
+        background: var(--btn); border: 1px solid transparent;
+        border-radius: var(--r-pill); padding: 3px 10px; transition: background var(--t), border-color var(--t);
       }
-      #timebar button.active { background: rgba(90, 140, 230, 0.7); border-color: #9cc4ff; }
+      #timebar button:hover { background: var(--btn-hover); }
+      #timebar button.active { background: var(--btn-active); border-color: var(--glow); }
       #time-display { min-width: 168px; text-align: center; color: #cfe3ff; cursor: pointer; }
       #timebar.warped #time-display { color: #e8c66a; } /* amber = not real time */
       #bottombar {

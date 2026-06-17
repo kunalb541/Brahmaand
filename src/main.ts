@@ -119,11 +119,21 @@ function applySkyExposure(): void {
 // --- UI: survey switcher (PRO only — the public doesn't pick observatories; see auto-survey) ---
 const surveyRow = document.getElementById('surveys')!;
 surveyRow.classList.add('pro-only');
+// wavelength band per survey → a glanceable colour dot (radio→IR→optical→UV→X-ray spectrum)
+const BAND_COLOR: Record<string, string> = {
+  dss2: '#8fc6ff', panstarrs: '#8fc6ff', des: '#ffd27a', decaps: '#ffd27a',
+  unwise: '#ff8a4c', rubin: '#9af0d6', hst: '#dcb6ff', 'jwst-carina': '#ff8a4c', mellinger: '#aadcff',
+};
 const surveyButtons: HTMLButtonElement[] = SURVEYS.map((s) => {
   const b = document.createElement('button');
-  b.textContent = s.name;
+  const dot = document.createElement('span');
+  dot.className = 'band';
+  dot.style.color = BAND_COLOR[s.id] ?? '#8fc6ff';
+  const label = document.createElement('span');
+  label.textContent = s.name;
+  b.append(dot, label);
   b.dataset.id = s.id;
-  b.title = `${s.hemisphere} · ${s.resolution}/px · zoom in to stream`;
+  b.title = `${s.hemisphere} · ${s.resolution}/px · tap to switch telescope (zoom in to stream)`;
   b.addEventListener('click', () => void setSurvey(s, { jump: true }));
   surveyRow.appendChild(b);
   return b;
