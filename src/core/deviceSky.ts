@@ -27,6 +27,9 @@ const AZ_SIGN = 1;
 const AZ_OFFSET_DEG = 0;
 // Slerp time constant (s): smaller = snappier, larger = smoother. ~0.07 s is both.
 const SLERP_TAU = 0.07;
+// Heading drift-correction time constant (s): slow enough to average out compass noise (no jitter),
+// fast enough to keep gyro yaw drift from ever building up.
+const DRIFT_TAU = 1.5;
 
 const DEG2RAD = Math.PI / 180;
 
@@ -162,9 +165,11 @@ export class DeviceSky {
   private latRad: number | null = null;
   private lonRad: number | null = null;
 
-  // one-time compass north seed (captured when ~level) + the user's persistent drag-align
+  // compass north reference: snapped on first valid sample, then slowly drift-corrected toward the
+  // compass (complementary filter) so iOS gyro yaw drift can't accumulate. + persistent drag-align.
   private compassSeed = 0;
   private seeded = false;
+  private lastSeedMs = 0;
   private azOffsetUser = 0;
 
   private readonly targetQuat = new THREE.Quaternion();
@@ -205,6 +210,7 @@ export class DeviceSky {
     this.hasTarget = false;
     this.hasSmooth = false;
     this.seeded = false;
+    this.lastSeedMs = 0;
     return true;
   }
 
@@ -277,13 +283,27 @@ export class DeviceSky {
     if (typeof ev.webkitCompassHeading === 'number' && isFinite(ev.webkitCompassHeading)) headingDeg = ev.webkitCompassHeading;
     else if (ev.absolute) headingDeg = (360 - e.alpha) % 360;
 
-    // ONE-TIME north seed when ~level (look azimuth ≈ compass heading); never fed continuously.
-    if (!this.seeded && headingDeg != null) {
+    // SLOW complementary heading correction — cancels the iOS gyro YAW DRIFT (the "rotates on its
+    // own" creep) by gently pulling the north seed toward the compass. Sampled only when the phone
+    // isn't pointed too high (|Up| < 0.7 ≈ alt < 44°, where the look azimuth is well-defined), and
+    // very slowly (τ≈1.5 s) so the magnetometer's per-reading noise averages out — drift dies, no
+    // jitter. The gyro still drives all the actual motion; this only fixes long-term drift.
+    if (headingDeg != null) {
       const enu = deviceLookEnu(e.alpha * DEG2RAD, e.beta * DEG2RAD, e.gamma * DEG2RAD, orient);
-      if (Math.abs(enu.U) < 0.5) {
+      if (Math.abs(enu.U) < 0.7) {
         const trueAz = (AZ_SIGN * headingDeg + AZ_OFFSET_DEG) * DEG2RAD;
-        this.compassSeed = trueAz - Math.atan2(enu.E, enu.N);
-        this.seeded = true;
+        const targetSeed = trueAz - Math.atan2(enu.E, enu.N);
+        let d = targetSeed - this.compassSeed;
+        d = Math.atan2(Math.sin(d), Math.cos(d)); // shortest wrap, ±π
+        if (!this.seeded) {
+          this.compassSeed = targetSeed; // snap on the first valid sample
+          this.seeded = true;
+        } else {
+          const now = Date.now();
+          const dt = this.lastSeedMs ? Math.min(0.1, (now - this.lastSeedMs) / 1000) : 0.016;
+          this.compassSeed += (1 - Math.exp(-dt / DRIFT_TAU)) * d; // τ≈1.5 s low-pass
+        }
+        this.lastSeedMs = Date.now();
       }
     }
 
