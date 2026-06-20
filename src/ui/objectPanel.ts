@@ -10,6 +10,7 @@ import {
   type ConeHit,
   type ObjectDetail,
 } from '../data/cds';
+const XMATCH_RADIUS_ARCSEC = 20;
 import {
   fetchLightcurve,
   fetchProbabilities,
@@ -419,10 +420,11 @@ export class ObjectPanel {
 
     this.show(head + `<div style="color:#7f93b5;margin-top:6px">loading light curve + classification…</div>` + this.transientFooter());
     try {
-      // light curve and the broker's ML classifier outputs, in parallel
-      const [lc, probs] = await Promise.all([
+      // light curve, the broker's ML outputs, and a SIMBAD cross-match at the alert position — in parallel
+      const [lc, probs, xmatch] = await Promise.all([
         fetchLightcurve(t.oid, ac.signal),
         fetchProbabilities(t.oid, ac.signal).catch(() => []),
+        coneSearch(t.raDeg, t.decDeg, XMATCH_RADIUS_ARCSEC / 3600, ac.signal, 5).catch(() => [] as ConeHit[]),
       ]);
       if (ac.signal.aborted) return;
 
@@ -486,6 +488,7 @@ export class ObjectPanel {
       this.show(
         head +
           mlHtml +
+          crossmatchHtml(xmatch) +
           sparkline(lc.points, lc.limits) +
           (isPro() ? periodBlock(lc.points) : '') + // research-grade period search → Pro
           csvLink(t.oid, lc.points, lc.limits) +
@@ -678,5 +681,29 @@ function csvLink(oid: string, lc: LcPoint[], limits: LcLimit[]): string {
     `<a href="${uri}" download="${escapeHtml(oid)}_lightcurve.csv" ` +
     `style="display:inline-block;margin-top:8px;color:#8aa6d6;border:1px solid rgba(120,170,255,.3);` +
     `border-radius:999px;padding:3px 11px;font-size:10.5px;text-decoration:none">⬇ light curve CSV</a>`
+  );
+}
+
+/**
+ * SIMBAD cross-match at the alert position — a core time-domain triage step: a nearby galaxy hints
+ * an extragalactic transient (SN/TDE) with a known host; a coincident known variable means it's a
+ * re-detection, not a discovery; nothing nearby means an uncatalogued position. Honest: shows the
+ * nearest source + type + separation and only flags the unambiguous cases.
+ */
+function crossmatchHtml(hits: ConeHit[]): string {
+  if (!hits.length) {
+    return `<div style="margin-top:6px;color:#7f93b5;font-size:10.5px">⊘ no SIMBAD source within ${XMATCH_RADIUS_ARCSEC}″ — uncatalogued position</div>`;
+  }
+  const h = hits[0]!;
+  const label = otypeLabel(h.otype);
+  let hint = '';
+  if (h.distArcsec < 2.5) hint = ' · likely the same source';
+  else if (/galax|seyfert|quasar|\bagn\b|blazar/i.test(label)) hint = ' · possible host';
+  return (
+    `<div style="margin-top:6px;font-size:11px">` +
+    `<span style="color:#7f93b5">nearest SIMBAD: </span>` +
+    `<a href="${simbadLink(h.mainId)}" target="_blank" rel="noopener" style="color:#8ab6ff">${escapeHtml(h.mainId)}</a>` +
+    ` <span style="color:#9fb3d6">${escapeHtml(label)}</span>` +
+    ` <span style="color:#7f93b5">· ${h.distArcsec.toFixed(1)}″${hint}</span></div>`
   );
 }
