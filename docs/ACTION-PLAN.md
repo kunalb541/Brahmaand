@@ -88,8 +88,8 @@ shown is real and sourced. Last updated 2026-06-20.*
   gated to the planetarium (Earth) view.
 - ✅ **Gyro smoothing tuned smoother** (`SLERP_TAU` 0.13, `DRIFT_TAU` 2.5).
 - ✅ **UI de-boxed** — panels softened (radii), modern sliders / dropdowns / scrollbars.
-- Tests now **41 passing** — frames (4), FITS (4), observability (6), ephemeris (8), Lomb-Scargle
-  periodogram (4), device-sky/gyro (9). Typecheck clean; production build green.
+- Tests now **42 passing** — frames (4), FITS (4), observability (7), ephemeris (8), Lomb-Scargle
+  periodogram (5), photometry (4), device-sky/gyro (10). Typecheck clean; production build green.
 
 ---
 

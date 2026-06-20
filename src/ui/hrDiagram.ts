@@ -20,6 +20,7 @@ const PAD = 34;
 export class HrDiagram {
   private wrap: HTMLDivElement;
   private canvas: HTMLCanvasElement;
+  private ctx!: CanvasRenderingContext2D;
   private data: CmdPoint[] = [];
   private dpr = Math.min(2, window.devicePixelRatio || 1);
   visible = false;
@@ -54,6 +55,7 @@ export class HrDiagram {
     this.canvas.width = W * this.dpr;
     this.canvas.height = H * this.dpr;
     this.canvas.style.cssText = `width:${W}px;height:${H}px;display:block`;
+    this.ctx = this.canvas.getContext('2d')!; // cache once, not per render
 
     this.wrap.append(bar, this.canvas);
     document.body.appendChild(this.wrap);
@@ -77,7 +79,7 @@ export class HrDiagram {
   }
 
   private render(): void {
-    const ctx = this.canvas.getContext('2d')!;
+    const ctx = this.ctx;
     ctx.save();
     ctx.scale(this.dpr, this.dpr);
     ctx.clearRect(0, 0, W, H);

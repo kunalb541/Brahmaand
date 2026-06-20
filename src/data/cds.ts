@@ -24,12 +24,27 @@ class RateLimiter {
       }
     }, 1000);
   }
-  acquire(): Promise<void> {
+  acquire(signal?: AbortSignal): Promise<void> {
+    if (signal?.aborted) return Promise.reject(new DOMException('Aborted', 'AbortError'));
     if (this.tokens > 0) {
       this.tokens--;
       return Promise.resolve();
     }
-    return new Promise((res) => this.queue.push(res));
+    // queued: free the slot (and reject) if the caller aborts before its turn, so rapid re-clicks
+    // don't burn tokens on requests nobody is waiting for
+    return new Promise((res, rej) => {
+      const run = (): void => {
+        signal?.removeEventListener('abort', onAbort);
+        res();
+      };
+      const onAbort = (): void => {
+        const i = this.queue.indexOf(run);
+        if (i >= 0) this.queue.splice(i, 1);
+        rej(new DOMException('Aborted', 'AbortError'));
+      };
+      this.queue.push(run);
+      signal?.addEventListener('abort', onAbort, { once: true });
+    });
   }
 }
 export const cdsLimiter = new RateLimiter(4); // shared across ALL CDS services (SIMBAD, VizieR, …)
@@ -64,7 +79,7 @@ const tapCache = new LruCache<TapResult>(300);
 async function tapQuery(adql: string, signal?: AbortSignal): Promise<TapResult> {
   const cached = tapCache.get(adql);
   if (cached) return cached;
-  await cdsLimiter.acquire();
+  await cdsLimiter.acquire(signal);
   const body = new URLSearchParams({ REQUEST: 'doQuery', LANG: 'ADQL', FORMAT: 'json', QUERY: adql });
   const r = await fetch(SIMBAD_TAP, { method: 'POST', body, ...(signal ? { signal } : {}) });
   if (!r.ok) throw new Error(`SIMBAD TAP ${r.status}`);

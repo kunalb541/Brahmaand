@@ -145,4 +145,20 @@ describe('deviceSky — sky registration (singularity-free)', () => {
     expect(maxStep).toBeLessThan(0.1); // ~2° device step → small, continuous look step
     expect(monotonic).toBe(true); // tilt keeps panning one way (pitch not inverted/jumpy)
   });
+
+  it('J2000 frame correction: passing unixMs rotates the look by the precession (~0.2–0.5° in 2026)', () => {
+    const q0 = new THREE.Quaternion();
+    const q1 = new THREE.Quaternion();
+    const t = Date.UTC(2026, 5, 21, 0, 0, 0);
+    // same device orientation, with and without the of-date→J2000 correction
+    buildSkyQuat(0.2, 1.3, -0.1, 0, 0, LAT, LST, q0); // no unixMs → raw (of-date)
+    buildSkyQuat(0.2, 1.3, -0.1, 0, 0, LAT, LST, q1, t); // J2000-corrected
+    const v0 = new THREE.Vector3(0, 0, -1).applyQuaternion(q0);
+    const v1 = new THREE.Vector3(0, 0, -1).applyQuaternion(q1);
+    const sepDeg = (v0.angleTo(v1) * 180) / Math.PI;
+    // the correction is genuinely applied (non-zero) and the right order of magnitude (the look-dir
+    // shift is a projection of the ~0.34° J2000→2026 equatorial precession, so direction-dependent)
+    expect(sepDeg).toBeGreaterThan(0.02);
+    expect(sepDeg).toBeLessThan(0.6);
+  });
 });

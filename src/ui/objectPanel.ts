@@ -181,7 +181,9 @@ export class ObjectPanel {
         ? `<span style="color:#7fe3a8">circumpolar (never sets)</span>`
         : rts.status === 'never'
           ? `<span style="color:#f08a7a">never rises from your site</span>`
-          : `rise ${fmt(rts.riseMs)} · transit ${fmt(rts.transitMs)} · set ${fmt(rts.setMs)}`;
+          // rise/set bracket the NEXT transit, so one may already be in the past — say so honestly
+          : `${rts.riseMs != null && rts.riseMs < now ? 'rose' : 'rises'} ${fmt(rts.riseMs)} · ` +
+            `transit ${fmt(rts.transitMs)} · ${rts.setMs != null && rts.setMs < now ? 'set' : 'sets'} ${fmt(rts.setMs)}`;
 
     const rows =
       `<div style="font-size:11px;line-height:1.5">` +

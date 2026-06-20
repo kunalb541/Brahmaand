@@ -34,7 +34,7 @@ const VIZIER_TAP = 'https://tapvizier.cds.unistra.fr/TAPVizieR/tap/sync';
 
 // VizieR is a CDS service → share the SINGLE CDS token bucket (not a second one) so the combined
 // rate to CDS stays under their ~5–6 req/s etiquette.
-const acquire = () => cdsLimiter.acquire();
+const acquire = (signal?: AbortSignal) => cdsLimiter.acquire(signal);
 
 const cache = new Map<string, CatalogSource[]>();
 
@@ -56,7 +56,7 @@ export async function fetchCatalog(
   const adql =
     `SELECT TOP ${limit} ${cols} FROM "${preset.table}" ` +
     `WHERE 1=CONTAINS(POINT('ICRS',${preset.ra},${preset.dec}),CIRCLE('ICRS',${raDeg},${decDeg},${r}))`;
-  await acquire();
+  await acquire(signal);
   const body = new URLSearchParams({ REQUEST: 'doQuery', LANG: 'ADQL', FORMAT: 'json', QUERY: adql });
   const resp = await fetch(VIZIER_TAP, { method: 'POST', body, ...(signal ? { signal } : {}) });
   if (!resp.ok) throw new Error(`VizieR ${resp.status}`);

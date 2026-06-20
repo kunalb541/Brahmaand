@@ -90,7 +90,7 @@ Repo: **[github.com/kunalb541/Brahmaand](https://github.com/kunalb541/Brahmaand)
 npm install
 npm run dev          # → http://localhost:5173  (look around the real sky)
 npm run build        # typecheck + production bundle into dist/
-npm test             # 41 unit tests (frames, ephemeris, observability, FITS, periodogram, device-sky)
+npm test             # 42 unit tests (frames, ephemeris, observability, FITS, periodogram, device-sky)
 
 # Native apps (Capacitor) — see docs/IOS.md and docs/ANDROID.md
 npm run ios:sync && npm run ios:open       # build web → open in Xcode → ▶ to your iPhone
@@ -259,9 +259,9 @@ of its spec — [docs/DECISIONS.md](docs/DECISIONS.md) records the exact deviati
 
 - **Phase: built, runnable & verified** on web + native iOS (Xcode `BUILD SUCCEEDED`, SPM, no
   CocoaPods) + native Android (`app-debug.apk` ~18 MB, `BUILD SUCCESSFUL`).
-- **41 unit tests passing** — coordinate frames (4), FITS parsing (4), observability (7, incl. the
+- **42 unit tests passing** — coordinate frames (4), FITS parsing (4), observability (7, incl. the
   J2000⇄of-date frame round-trip), ephemeris (8, including the 2020 great-conjunction and 2017
-  total-eclipse anchors), Lomb-Scargle periodogram (5), photometry/AB-flux (4), device-sky/gyro (9).
+  total-eclipse anchors), Lomb-Scargle periodogram (5), photometry/AB-flux (4), device-sky/gyro (10).
   Typecheck clean, production build green.
 - **CI:** GitHub Actions runs typecheck + test + build on every push (green); Pages deploy only on
   manual dispatch (Pages not enabled yet).
@@ -270,8 +270,8 @@ of its spec — [docs/DECISIONS.md](docs/DECISIONS.md) records the exact deviati
   Backend-gated (out of scope for the $0 design): ZTF/LSST forced photometry, TNS names,
   watchlists, Kafka streams.
 - **Commercial blockers** (see [docs/SCALING-COMMERCIAL.md](docs/SCALING-COMMERCIAL.md)): the
-  Mellinger panorama is non-commercial and must be replaced before selling; the Gaia/HYG-derived
-  star binaries are CC BY-SA; an attribution UI is mandatory.
+  Mellinger panorama is non-commercial and must be replaced before selling; the star binaries are
+  Gaia DR3 (CC BY-SA 3.0 IGO) + HYG v4.1 (CC BY-SA 4.0); an attribution UI is mandatory.
 - **No VR headset on the team.** Everything runs as a plain desktop/mobile web app; VR is developed
   against the Immersive Web Emulator. The AR compass calibration knobs (`AZ_SIGN`/`AZ_OFFSET_DEG`)
   await an on-device check.
