@@ -39,7 +39,8 @@ import {
 } from '../data/observability';
 import { getSimMs } from '../core/simTime';
 import type { BodyEphemeris } from '../data/ephemeris';
-import { lombScargle, phaseFold } from '../data/periodogram';
+import { lombScargle, phaseFold, type LSResult } from '../data/periodogram';
+import { vsxConeSearch, vsxLink, type VsxMatch } from '../data/vsx';
 
 interface PanelOpts {
   flyTo: (raDeg: number, decDeg: number, extended: boolean) => void;
@@ -420,11 +421,12 @@ export class ObjectPanel {
 
     this.show(head + `<div style="color:#7f93b5;margin-top:6px">loading light curve + classification…</div>` + this.transientFooter());
     try {
-      // light curve, the broker's ML outputs, and a SIMBAD cross-match at the alert position — in parallel
-      const [lc, probs, xmatch] = await Promise.all([
+      // light curve, the broker's ML outputs, a SIMBAD cross-match, and an AAVSO VSX cross-match — all parallel
+      const [lc, probs, xmatch, vsx] = await Promise.all([
         fetchLightcurve(t.oid, ac.signal),
         fetchProbabilities(t.oid, ac.signal).catch(() => []),
         coneSearch(t.raDeg, t.decDeg, XMATCH_RADIUS_ARCSEC / 3600, ac.signal, 5).catch(() => [] as ConeHit[]),
+        vsxConeSearch(t.raDeg, t.decDeg, XMATCH_RADIUS_ARCSEC / 3600, ac.signal).catch(() => null),
       ]);
       if (ac.signal.aborted) return;
 
@@ -485,12 +487,16 @@ export class ObjectPanel {
           `<div style="color:#5f7494;font-size:9.5px;margin-top:2px">image-subtraction stamps · newest alert</div>`;
       }
 
+      // Lomb–Scargle is Pro-only and the expensive step — compute once, reuse for the VSX comparison
+      const ls = isPro() ? dominantBandLS(lc.points) : null;
+
       this.show(
         head +
           mlHtml +
           crossmatchHtml(xmatch) +
+          vsxBlock(vsx, ls?.res.bestPeriodDays ?? null) +
           sparkline(lc.points, lc.limits) +
-          (isPro() ? periodBlock(lc.points) : '') + // research-grade period search → Pro
+          (ls ? periodBlock(ls) : '') + // research-grade period search → Pro
           csvLink(t.oid, lc.points, lc.limits) +
           triptych +
           // wide-field context cutout with a reticle marking the alert position
@@ -609,17 +615,27 @@ function sparkline(lc: LcPoint[], limits: LcLimit[] = []): string {
  * the broker already returned. Runs on the best-sampled band; reports the peak period with its
  * Horne–Baliunas false-alarm probability and (when significant) the phase-folded light curve.
  */
-function periodBlock(lc: LcPoint[]): string {
-  if (lc.length < 10) return ''; // need enough detections to say anything about periodicity
+interface BandLS {
+  res: LSResult;
+  band: number;
+  pts: LcPoint[];
+}
+
+/** Pick the best-sampled band and run Lomb–Scargle once (the expensive step, reused below). */
+function dominantBandLS(lc: LcPoint[]): BandLS | null {
+  if (lc.length < 10) return null; // need enough detections to say anything about periodicity
   const byBand = new Map<number, LcPoint[]>();
   for (const p of lc) (byBand.get(p.fid) ?? byBand.set(p.fid, []).get(p.fid)!).push(p);
   let band = -1;
   let pts: LcPoint[] = [];
   for (const [f, ps] of byBand) if (ps.length > pts.length) { band = f; pts = ps; }
-  if (pts.length < 10) return '';
-
+  if (pts.length < 10) return null;
   const res = lombScargle(pts.map((p) => p.mjd), pts.map((p) => p.mag));
-  if (!res) return '';
+  return res ? { res, band, pts } : null;
+}
+
+function periodBlock(ls: BandLS): string {
+  const { res, band, pts } = ls;
   const sig = res.fap < 0.01;
   const W = 264, H = 70, pad = 9;
 
@@ -667,6 +683,37 @@ function periodBlock(lc: LcPoint[]): string {
     out +
     `<div style="color:#5f7494;font-size:10px">Lomb–Scargle · ${escapeHtml(FID_BAND[band] ?? String(band))}-band, ${pts.length} pts · ` +
     `P = ${pstr} · FAP ${fapStr} · ${verdict}</div>`
+  );
+}
+
+function fmtP(days: number): string {
+  return days < 1 ? `${(days * 24).toFixed(2)} h` : `${days.toFixed(4)} d`;
+}
+
+/**
+ * AAVSO VSX catalogued-variable info + a cross-check of our measured period against the published
+ * one — the kind of literature confirmation a researcher does by hand. Accepts the catalogue period,
+ * its half, and its double (the usual Lomb–Scargle aliases) as a "match".
+ */
+function vsxBlock(m: VsxMatch | null, measuredP: number | null): string {
+  if (!m) return '';
+  const bits: string[] = [`<b style="color:#cdbcf0">${escapeHtml(m.type || 'variable')}</b>`];
+  if (m.periodDays) bits.push(`P<sub>cat</sub> = ${fmtP(m.periodDays)}`);
+  if (m.maxMag && m.minMag) bits.push(`${escapeHtml(m.maxMag)}–${escapeHtml(m.minMag)}`);
+  let cmp = '';
+  if (measuredP && m.periodDays) {
+    const r = measuredP / m.periodDays;
+    const near = (x: number) => Math.abs(r - x) / x < 0.03;
+    if (near(1)) cmp = ` · <span style="color:#7fe0a0">✓ your LS period matches</span>`;
+    else if (near(0.5)) cmp = ` · <span style="color:#e8c66a">your LS ≈ ½× catalogue (alias)</span>`;
+    else if (near(2)) cmp = ` · <span style="color:#e8c66a">your LS ≈ 2× catalogue (alias)</span>`;
+    else cmp = ` · <span style="color:#e0a060">your LS ${fmtP(measuredP)} ≠ catalogue</span>`;
+  }
+  return (
+    `<div style="margin-top:6px;font-size:11px"><span style="color:#7f93b5">AAVSO VSX: </span>` +
+    `<a href="${vsxLink(m.oid)}" target="_blank" rel="noopener" style="color:#b69bff">${escapeHtml(m.name)}</a> ` +
+    bits.join(' · ') +
+    ` <span style="color:#7f93b5">· ${m.sepArcsec.toFixed(1)}″</span>${cmp}</div>`
   );
 }
 
