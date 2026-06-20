@@ -26,6 +26,7 @@ in the app's UI (the in-app panels already do).
 | HiPS tiles (DSS2…) | CDS / alasky | Hotlinked per IVOA HiPS intended usage; display the survey `obs_copyright`. |
 | SIMBAD, Sesame, VizieR, hips2fits, MocServer | **CDS, Strasbourg** | Acknowledge CDS; respect ~5–6 req/s etiquette (the app rate-limits to 4/s). |
 | Transient alerts (when enabled) | ALeRCE (ZTF) / ANTARES, NOIRLab (Rubin/LSST + ZTF) brokers | Cite the broker and the underlying survey; see in-app credits. |
+| AAVSO VSX (variable-star cross-match on alerts) | **AAVSO**, International Variable Star Index | CORS-open JSON API. Acknowledge: "This research has made use of the International Variable Star Index (VSX) database, operated at AAVSO, Cambridge, Massachusetts, USA." |
 
 ## Bundled third-party code
 

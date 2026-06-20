@@ -57,6 +57,11 @@ Repo: **[github.com/kunalb541/Brahmaand](https://github.com/kunalb541/Brahmaand)
 >   the nearest catalogued source + type + separation — a coincident known variable ("likely the same
 >   source", a re-detection), a nearby galaxy/AGN ("possible host", extragalactic), or nothing
 >   ("uncatalogued"). Verified live: RR Lyrae ZTF18abntqrg → `RR* · 0.1″ · likely the same source`.
+> - **AAVSO VSX cross-match + period validation.** Also queries the AAVSO Variable Star Index (CORS-open)
+>   for the catalogued variability type, **published period** and magnitude range, and **cross-checks our
+>   measured Lomb-Scargle period against the literature** (✓ match / ½× or 2× alias / differs). Verified:
+>   ZTF18abntqrg → `RRAB · P_cat = 11.75 h · ✓ your LS period matches` — four independent agreements
+>   (broker ML, SIMBAD, VSX, our periodogram).
 > - **Rendered horizon.** Stellarium/Star-Walk-style ground: a translucent ground hemisphere that
 >   dims the below-horizon sky, a bright horizon line and N/E/S/W cardinal markers, built from the
 >   observer location + time; works in look-around and phone-gyro modes; on the "Horizon" toggle.
