@@ -53,6 +53,10 @@ Repo: **[github.com/kunalb541/Brahmaand](https://github.com/kunalb541/Brahmaand)
 > - **Hertzsprung–Russell diagram.** A live colour–magnitude diagram built from the loaded Gaia DR3 +
 >   HYG catalogues (absolute magnitude vs colour) — the main sequence, red-giant branch and
 >   white-dwarf region from real data. Overlays toggle / `D` hotkey.
+> - **SIMBAD cross-match on alerts.** Opening a transient runs a cone search at its position and shows
+>   the nearest catalogued source + type + separation — a coincident known variable ("likely the same
+>   source", a re-detection), a nearby galaxy/AGN ("possible host", extragalactic), or nothing
+>   ("uncatalogued"). Verified live: RR Lyrae ZTF18abntqrg → `RR* · 0.1″ · likely the same source`.
 > - **Rendered horizon.** Stellarium/Star-Walk-style ground: a translucent ground hemisphere that
 >   dims the below-horizon sky, a bright horizon line and N/E/S/W cardinal markers, built from the
 >   observer location + time; works in look-around and phone-gyro modes; on the "Horizon" toggle.
