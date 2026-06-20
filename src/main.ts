@@ -18,7 +18,8 @@ import {
 import { MessierLayer } from './sky/messier';
 import { SolarSystemLayer } from './sky/solarSystem';
 import { solarSystemAt, angularSepDeg } from './data/ephemeris';
-import { getObserver, acquireObserver, horizontalToEquatorial } from './data/observability';
+import { getObserver, setObserver, acquireObserver, horizontalToEquatorial } from './data/observability';
+import { Horizon } from './sky/horizon';
 import { getSimMs, getRate, setRate, setSimMs, resetToNow, isLive } from './core/simTime';
 import { StarLabels } from './sky/starLabels';
 import { StarField } from './stars/starField';
@@ -191,14 +192,20 @@ wireGrid('toggle-grid', 'equ');
 wireGrid('toggle-ecliptic', 'ecl');
 wireGrid('toggle-galactic', 'gal');
 
-// horizon (alt/az) grid — observer + time dependent, rebuilt ~1 Hz while shown
+// Horizon: the Stellarium/Star-Walk ground hemisphere + bright horizon line + N/E/S/W markers,
+// plus the alt/az grid. Observer + time dependent; works in look-around and phone modes alike.
+const horizon = new Horizon(scene, camera);
 let horizonGrid: THREE.LineSegments | null = null;
 let horizonBuiltMs = 0;
 let horizonBuiltSim = 0;
 const horizonBtn = document.getElementById('toggle-horizon') as HTMLButtonElement;
 horizonBtn.addEventListener('click', () => {
-  if (!getObserver()) acquireObserver(); // best-effort GPS; grid appears once a fix lands
+  if (!getObserver()) acquireObserver(); // best-effort GPS; the horizon appears once a fix lands
   gridOn.hor = horizonBtn.classList.toggle('active');
+  if (gridOn.hor && !getObserver()) {
+    // no location yet → let the user set one so the ground is in the right place
+    promptManualLocation();
+  }
 });
 function refreshHorizonGrid(): void {
   const obs = getObserver();
@@ -220,6 +227,15 @@ function refreshHorizonGrid(): void {
     horizonBuiltSim = sim;
   }
   horizonGrid!.visible = true;
+}
+/** Ask for lat/lon so the horizon/ground can be placed (when GPS is denied/unavailable). */
+function promptManualLocation(): void {
+  const v = prompt('Your latitude, longitude in degrees (e.g. 19.0760, 72.8777) — for the horizon & observability:');
+  if (v == null) return;
+  const m = v.split(/[,\s]+/).map(Number).filter((x) => isFinite(x));
+  if (m.length >= 2 && Math.abs(m[0]!) <= 90 && Math.abs(m[1]!) <= 180) {
+    setObserver({ latDeg: m[0]!, lonDeg: m[1]!, label: 'manual' });
+  }
 }
 
 // constellation boundaries + Messier toggles
@@ -1172,6 +1188,14 @@ startLoop(renderer, (dt) => {
     ecliptic.visible = precession.visible = gridOn.ecl;
     galactic.visible = gridOn.gal;
     if (hudTick) refreshHorizonGrid();
+    // horizon ground + cardinals: every frame (smooth label tracking), Earth-view only
+    const obsLoc = getObserver();
+    const showHorizon = gridOn.hor && !!obsLoc && nearEarth;
+    horizon.setVisible(showHorizon);
+    if (showHorizon) {
+      horizon.setCenter(rig.position);
+      horizon.update(obsLoc!, getSimMs());
+    }
 
     // solar system: ephemerides at sim-time (10 Hz is plenty — bodies move slowly on screen),
     // sized true-to-angular-diameter, Moon limb turned toward the Sun

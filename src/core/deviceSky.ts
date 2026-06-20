@@ -25,11 +25,12 @@ import { raDecToWorld } from '../math/frames';
 // Flip if azimuth comes out mirrored on a given device (move right → sky goes left).
 const AZ_SIGN = 1;
 const AZ_OFFSET_DEG = 0;
-// Slerp time constant (s): smaller = snappier, larger = smoother. ~0.07 s is both.
-const SLERP_TAU = 0.07;
+// Slerp time constant (s): larger = smoother (more glide, a touch more lag). 0.13 s reads as
+// "buttery" while still tracking — Star-Walk-like.
+const SLERP_TAU = 0.13;
 // Heading drift-correction time constant (s): slow enough to average out compass noise (no jitter),
 // fast enough to keep gyro yaw drift from ever building up.
-const DRIFT_TAU = 1.5;
+const DRIFT_TAU = 2.5;
 
 const DEG2RAD = Math.PI / 180;
 
