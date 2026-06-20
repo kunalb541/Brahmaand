@@ -451,7 +451,7 @@ See [plan/AGENT_INSTRUCTIONS.md](../plan/AGENT_INSTRUCTIONS.md) §6.
   "P = … · FAP … · significant/tentative" (false-alarm probability gates the "significant" claim,
   honouring the accuracy-first guardrail — a tentative peak is labelled tentative).
 - **Pure client math, no backend** — fits the $0/static design; no token, no proxy.
-- **Verified live** on RR Lyrae **ZTF18abntqrg** → **P = 7.89 h, FAP < 0.1%**, independently
+- **Verified live** on RR Lyrae **ZTF18abntqrg** → **P = 11.75 h, FAP < 0.1%**, independently
   corroborating the broker's ML classification "RRL 85%".
 
 ## 2026-06-20 — Rendered horizon, CSV export, label gating, gyro + UI polish

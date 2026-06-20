@@ -52,7 +52,7 @@ Repo: **[github.com/kunalb541/Brahmaand](https://github.com/kunalb541/Brahmaand)
 > - **Light-curve CSV export** (detections + upper limits) as a no-backend download — all users.
 > - **Hertzsprung–Russell diagram.** A live colour–magnitude diagram built from the loaded Gaia DR3 +
 >   HYG catalogues (absolute magnitude vs colour) — the main sequence, red-giant branch and
->   white-dwarf region from real data. Overlays toggle / `D` hotkey.
+>   white-dwarf region from real data. Overlays toggle / `R` hotkey.
 > - **SIMBAD cross-match on alerts.** Opening a transient runs a cone search at its position and shows
 >   the nearest catalogued source + type + separation — a coincident known variable ("likely the same
 >   source", a re-detection), a nearby galaxy/AGN ("possible host", extragalactic), or nothing
@@ -90,7 +90,7 @@ Repo: **[github.com/kunalb541/Brahmaand](https://github.com/kunalb541/Brahmaand)
 npm install
 npm run dev          # → http://localhost:5173  (look around the real sky)
 npm run build        # typecheck + production bundle into dist/
-npm test             # 35 unit tests (frames, ephemeris, observability, FITS, periodogram, device-sky)
+npm test             # 41 unit tests (frames, ephemeris, observability, FITS, periodogram, device-sky)
 
 # Native apps (Capacitor) — see docs/IOS.md and docs/ANDROID.md
 npm run ios:sync && npm run ios:open       # build web → open in Xcode → ▶ to your iPhone
@@ -126,9 +126,9 @@ and `node tools/build-gaia.mjs` for the Gaia DR3 extract (live ESA Gaia TAP, no 
 |---|---|---|---|
 | `C` | constellation figures | `B` | IAU boundaries |
 | `L` | star labels | `M` | Messier objects |
-| `D` | H–R diagram | | |
-| `G` | equatorial grid | `E` | ecliptic |
-| `H` | horizon grid | `P` | planets |
+| `R` | H–R diagram | `,` | ecliptic |
+| `G` | equatorial grid | `H` | horizon grid |
+| `P` | planets | | |
 | `T` | live alerts | `F` | FOV circle |
 | `[` `]` | time ±1 day | `N` | back to now |
 | `/` | search | `?` | help |
@@ -259,9 +259,10 @@ of its spec — [docs/DECISIONS.md](docs/DECISIONS.md) records the exact deviati
 
 - **Phase: built, runnable & verified** on web + native iOS (Xcode `BUILD SUCCEEDED`, SPM, no
   CocoaPods) + native Android (`app-debug.apk` ~18 MB, `BUILD SUCCESSFUL`).
-- **35 unit tests passing** — coordinate frames (4), FITS parsing (4), observability (6), ephemeris
-  (8, including the 2020 great-conjunction and 2017 total-eclipse anchors), Lomb-Scargle periodogram
-  (4), device-sky/gyro (9). Typecheck clean, production build green.
+- **41 unit tests passing** — coordinate frames (4), FITS parsing (4), observability (7, incl. the
+  J2000⇄of-date frame round-trip), ephemeris (8, including the 2020 great-conjunction and 2017
+  total-eclipse anchors), Lomb-Scargle periodogram (5), photometry/AB-flux (4), device-sky/gyro (9).
+  Typecheck clean, production build green.
 - **CI:** GitHub Actions runs typecheck + test + build on every push (green); Pages deploy only on
   manual dispatch (Pages not enabled yet).
 - **Remaining (optional polish):** NGC/IC deep catalogue, eclipse/conjunction finder UI, exoplanet

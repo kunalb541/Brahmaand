@@ -73,7 +73,7 @@ multi-wavelength HiPS surveys (DES/DECaPS/Rubin/JWST…); WebXR VR.
 | Feature | Status |
 |---|---|
 | Live alert feed + ML class + real/bogus + light curve (errors, upper limits) | ✅ |
-| Period-finding: Lomb-Scargle periodogram + phase-folding (P · FAP) | ✅ (best-sampled band; verified RR Lyrae P=7.89 h, FAP<0.1%) |
+| Period-finding: Lomb-Scargle periodogram + phase-folding (P · FAP) | ✅ (best-sampled band; verified RR Lyrae P = 11.75 h, FAP<0.1%) |
 | Light-curve CSV export (detections + upper limits) | ✅ (no-backend download, all users) |
 | Difference-image triptych (science/template/difference) | ✅ |
 | Broker toggle ZTF(ALeRCE) ⇄ Rubin/LSST(ANTARES) | ✅ |

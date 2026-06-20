@@ -127,10 +127,12 @@ export function createFitsView(opts: {
     .then(async (r) => {
       if (!r.ok) throw new Error(`hips2fits ${r.status}`);
       img = parseFits(await r.arrayBuffer());
+      if (!root.isConnected) return; // view was closed before the fetch resolved — don't touch detached DOM
       draw();
       readout.innerHTML = `hover for per-pixel value + WCS coords<br>${baseReadout()}`;
     })
     .catch((e) => {
+      if (!root.isConnected) return;
       readout.innerHTML = `<span style="color:#f99">FITS unavailable (${(e as Error).message}) — try again</span>`;
     });
 

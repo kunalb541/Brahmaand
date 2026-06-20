@@ -77,7 +77,7 @@ shown is real and sourced. Last updated 2026-06-20.*
   the periodogram and (when significant) the phase-folded light curve + "P = … · FAP …
   · significant/tentative". The standard period-finder for unevenly-sampled survey light curves
   (variable stars, eclipsing binaries, RR Lyrae/Cepheids). Verified live on RR Lyrae ZTF18abntqrg
-  → P = 7.89 h, FAP < 0.1%, corroborating the broker ML "RRL 85%".
+  → P = 11.75 h, FAP < 0.1%, corroborating the broker ML "RRL 85%".
 - ✅ **Light-curve CSV export** (detections + upper limits) — a no-backend download, available to all
   users.
 - ✅ **Rendered horizon** (`src/sky/horizon.ts`) — Stellarium/Star-Walk-style ground: a translucent
@@ -88,7 +88,7 @@ shown is real and sourced. Last updated 2026-06-20.*
   gated to the planetarium (Earth) view.
 - ✅ **Gyro smoothing tuned smoother** (`SLERP_TAU` 0.13, `DRIFT_TAU` 2.5).
 - ✅ **UI de-boxed** — panels softened (radii), modern sliders / dropdowns / scrollbars.
-- Tests now **35 passing** — frames (4), FITS (4), observability (6), ephemeris (8), Lomb-Scargle
+- Tests now **41 passing** — frames (4), FITS (4), observability (6), ephemeris (8), Lomb-Scargle
   periodogram (4), device-sky/gyro (9). Typecheck clean; production build green.
 
 ---
@@ -159,7 +159,7 @@ Rubin/LSST + ZTF** streams with a 37-tag taxonomy. That makes these feasible cli
     (`src/data/periodogram.ts`, unit-tested) on the best-sampled band finds the period; when
     significant, the light curve is phase-folded and shown with "P = … · FAP …
     · significant/tentative". The standard period-finder for unevenly-sampled survey light curves.
-    Verified live on RR Lyrae ZTF18abntqrg → P = 7.89 h, FAP < 0.1%.
+    Verified live on RR Lyrae ZTF18abntqrg → P = 11.75 h, FAP < 0.1%.
 
 **VR for pros (grounded, not gimmick):**
 11. Immersive **local stellar volume** (real Gaia parallax) walk-through; **spatial alert triage**
@@ -206,25 +206,28 @@ Rubin/LSST + ZTF** streams with a 37-tag taxonomy. That makes these feasible cli
 
 ---
 
-## 5. Research roadmap — high-value pro / time-domain features (researched, not yet built)
+## 5. Research roadmap — high-value pro / time-domain features
 
-Surfaced as worth building next, each tagged by whether it can run **browser-direct** (no backend,
-fits the $0 design) or is **backend-gated** (CORS or auth blocks the browser → needs the P5 tier).
+The browser-direct tier is **now shipped** (see the "Precision + research wave" status block).
+Remaining items are tagged browser-direct vs **backend-gated** (CORS or auth → needs the P5 tier).
 
-**Browser-direct (no backend):**
-- **More Lomb-Scargle options** — multi-band combined periodograms, period-aliasing notes (the
-  natural extension of the period-finder that just landed).
-- **AAVSO VSX cross-match** — is this a known variable star? what type/period? Variable Star Index lookup.
-- **Observability / airmass planning** for a target across a night (we already have observability;
-  extend to multi-night/season planning).
-- **Finder charts** via an **Aladin Lite** embed.
-- **Colour-magnitude / HR diagram** from Gaia for a field or cluster.
-- **Flux ↔ AB-mag** conversion for Rubin, using `AB = 31.4 − 2.5·log10(flux_nJy)` (the mag/flux
-  toggle on light curves — see P4).
+**Browser-direct — SHIPPED:**
+- ✅ **AAVSO VSX cross-match** — catalogued type / published period / range, with a cross-check of the
+  measured Lomb-Scargle period against the literature (`src/data/vsx.ts`).
+- ✅ **SIMBAD cross-match on alerts** — nearest catalogued source + type + separation (CDS cone search,
+  CORS-open, browser-direct — *no proxy needed*).
+- ✅ **Colour-magnitude / HR diagram** from the loaded Gaia DR3 + HYG catalogues (`src/ui/hrDiagram.ts`).
+- ✅ **Flux ↔ AB-mag** (`src/data/photometry.ts`) — peak flux + `flux_uJy` CSV column, `AB = 31.4 −
+  2.5·log10(flux_nJy)` / `23.9 − 2.5·log10(flux_µJy)`.
+- ✅ **Finder charts** — N-up/E-left + scale bar on object/alert cutouts (self-contained, no Aladin dep).
+- ✅ **Observability / airmass planning** on every alert (rise/transit/set + tonight curve).
+
+**Browser-direct — still open:**
+- **More Lomb-Scargle options** — multi-band combined periodograms, explicit aliasing flags.
+- **Multi-night / season observability planning** (extend the single-night curve).
 
 **Backend-gated (CORS / auth → P5 tier):**
 - **TNS** name / classification / spectra resolution — needs a registered bot token + server (no CORS).
-- **SIMBAD / CDS Sesame cross-match** — CORS varies, so it needs a proxy.
 - **Watchlists / saved ANTARES ES-DSL queries** — server-side persistence + auth.
 - **Kafka live streaming** of alerts.
 - **Forced photometry** at a fixed position (ZTF/LSST forced-photometry services are token-gated).

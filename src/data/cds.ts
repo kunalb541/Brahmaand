@@ -32,7 +32,7 @@ class RateLimiter {
     return new Promise((res) => this.queue.push(res));
   }
 }
-const cdsLimiter = new RateLimiter(4);
+export const cdsLimiter = new RateLimiter(4); // shared across ALL CDS services (SIMBAD, VizieR, …)
 
 // ---------- generic LRU ----------
 class LruCache<V> {

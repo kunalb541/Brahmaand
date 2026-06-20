@@ -624,7 +624,7 @@ function sparkline(lc: LcPoint[], limits: LcLimit[] = []): string {
   const bands = [...byBand.keys()].sort().map((f) => FID_BAND[f]).join('/');
   const peak = lc.length
     ? ` · ${Math.max(...lc.map((p) => p.mag)).toFixed(1)}→${Math.min(...lc.map((p) => p.mag)).toFixed(1)} mag` +
-      ` · peak ${formatFlux(abMagToMicroJy(Math.min(...lc.map((p) => p.mag))))}`
+      ` · peak ≈ ${formatFlux(abMagToMicroJy(Math.min(...lc.map((p) => p.mag))))}` // ZTF g/r/i ≈ AB
     : '';
   return (
     svg +
@@ -770,7 +770,7 @@ function vsxBlock(m: VsxMatch | null, measuredP: number | null): string {
 /** Light-curve CSV (detections + upper limits) as a download link — no backend, data: URI. */
 function csvLink(oid: string, lc: LcPoint[], limits: LcLimit[]): string {
   if (!lc.length && !limits.length) return '';
-  let csv = 'mjd,band,mag,mag_err,flux_uJy,kind\n';
+  let csv = 'mjd,band,mag,mag_err,flux_uJy_AB,kind\n'; // flux from AB zero-point (survey mag ≈ AB)
   for (const p of lc)
     csv += `${p.mjd},${FID_BAND[p.fid] ?? p.fid},${p.mag},${p.magErr ?? ''},${abMagToMicroJy(p.mag).toFixed(4)},detection\n`;
   for (const l of limits)

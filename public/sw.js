@@ -6,8 +6,12 @@ const TILE_CACHE = 'brahmaand-tiles-v1';
 const TILE_MAX = 1500;
 
 const CDS_TILE_HOSTS = ['alasky.cds.unistra.fr', 'alaskybis.cds.unistra.fr'];
-// dynamic services — always go to network, never cache
-const DYNAMIC_HOSTS = ['simbad.cds.unistra.fr', 'cds.unistra.fr', 'api.alerce.online', 'gea.esac.esa.int'];
+// dynamic services — always go to network, never cache (CDS, ALeRCE, Gaia, VizieR, ANTARES, AAVSO VSX)
+const DYNAMIC_HOSTS = [
+  'simbad.cds.unistra.fr', 'cds.unistra.fr', 'tapvizier.cds.unistra.fr',
+  'api.alerce.online', 'gea.esac.esa.int',
+  'api.antares.noirlab.edu', 'antares.noirlab.edu', 'vsx.aavso.org',
+];
 
 self.addEventListener('install', () => self.skipWaiting());
 

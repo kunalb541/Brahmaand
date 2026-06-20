@@ -4,6 +4,7 @@
  * preset set: Gaia (optical/astrometry), 2MASS (near-IR), AllWISE (mid-IR), Chandra CSC2 (X-ray).
  * Column names per catalogue are verified; the cone query uses each table's native position cols.
  */
+import { cdsLimiter } from './cds';
 
 export interface CatalogPreset {
   id: string;
@@ -31,17 +32,9 @@ export interface CatalogSource {
 
 const VIZIER_TAP = 'https://tapvizier.cds.unistra.fr/TAPVizieR/tap/sync';
 
-// small shared limiter (VizieR is a CDS service)
-let tokens = 3;
-const waiters: Array<() => void> = [];
-setInterval(() => {
-  tokens = 3;
-  while (tokens > 0 && waiters.length) {
-    tokens--;
-    waiters.shift()!();
-  }
-}, 1000);
-const acquire = () => (tokens > 0 ? (tokens--, Promise.resolve()) : new Promise<void>((r) => waiters.push(r)));
+// VizieR is a CDS service → share the SINGLE CDS token bucket (not a second one) so the combined
+// rate to CDS stays under their ~5–6 req/s etiquette.
+const acquire = () => cdsLimiter.acquire();
 
 const cache = new Map<string, CatalogSource[]>();
 

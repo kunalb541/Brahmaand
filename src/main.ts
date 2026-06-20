@@ -947,6 +947,10 @@ addEventListener('hashchange', applyViewHash);
   tonightBtn,
   catalogOverlay,
   activeCatalogs,
+  messier,
+  horizon,
+  hrDiagram,
+  solar,
 };
 const _h0 = renderer.getDrawingBufferSize(new THREE.Vector2()).y;
 transientLayer.setPixelScale(_h0);
@@ -986,7 +990,9 @@ aboutPanel.innerHTML =
   '<b>Sky imagery</b> — DSS2 (STScI) &amp; Mellinger Milky Way, via CDS HiPS / hips2fits<br>' +
   '<b>3D stars</b> — Gaia DR3 (ESA/Gaia/DPAC, CC BY-SA 3.0 IGO) + HYG (CC BY-SA 4.0); distances from parallax / Bailer-Jones<br>' +
   '<b>Object data</b> — SIMBAD, Sesame, VizieR (CDS, Strasbourg)<br>' +
+  '<b>Variable stars</b> — AAVSO International Variable Star Index (VSX)<br>' +
   '<b>Alerts</b> — ALeRCE broker (ZTF) &amp; ANTARES broker, NOIRLab (Rubin/LSST + ZTF)<br>' +
+  '<b>Ephemerides</b> — astronomy-engine (VSOP87/ELP, MIT)<br>' +
   '<b>Constellations</b> — d3-celestial (BSD-3, Olaf Frohn)' +
   '</div>' +
   '<p style="margin:12px 0 0;font-size:11px;color:#5f7494">Code MIT · data per provider terms. ' +
