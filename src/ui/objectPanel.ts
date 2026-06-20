@@ -41,6 +41,7 @@ import { getSimMs } from '../core/simTime';
 import type { BodyEphemeris } from '../data/ephemeris';
 import { lombScargle, phaseFold, type LSResult } from '../data/periodogram';
 import { vsxConeSearch, vsxLink, type VsxMatch } from '../data/vsx';
+import { abMagToMicroJy, formatFlux } from '../data/photometry';
 
 interface PanelOpts {
   flyTo: (raDeg: number, decDeg: number, extended: boolean) => void;
@@ -319,6 +320,7 @@ export class ObjectPanel {
         `style="display:block;width:100%;border-radius:11px;background:#000;aspect-ratio:1">` +
         `<div style="position:absolute;left:50%;top:50%;width:34px;height:34px;margin:-17px 0 0 -17px;` +
         `border:1.5px solid #6fe3ff;border-radius:50%;box-shadow:0 0 6px #6fe3ff,inset 0 0 4px #6fe3ff;pointer-events:none"></div>` +
+        finderOverlay(extended ? 0.4 : 0.12) +
         `</div>`,
     );
     rowsHtml.push(
@@ -499,10 +501,11 @@ export class ObjectPanel {
           (ls ? periodBlock(ls) : '') + // research-grade period search → Pro
           csvLink(t.oid, lc.points, lc.limits) +
           triptych +
-          // wide-field context cutout with a reticle marking the alert position
+          // finder chart: wide-field cutout + reticle + N/E orientation + scale bar (3′ field)
           `<div style="position:relative;margin-top:8px">` +
           `<img src="${cutout}" loading="lazy" alt="field" style="display:block;width:100%;border-radius:11px;background:#000;aspect-ratio:1">` +
           `<div style="position:absolute;left:50%;top:50%;width:34px;height:34px;margin:-17px 0 0 -17px;border:1.5px solid #6fe3ff;border-radius:50%;box-shadow:0 0 6px #6fe3ff,inset 0 0 4px #6fe3ff;pointer-events:none"></div>` +
+          finderOverlay(0.05) +
           `</div>` +
           `<div style="margin-top:8px"><a href="${objectPageUrl(t.oid)}" target="_blank" rel="noopener" style="color:#8aa6d6">${brokerName()} object ↗</a></div>` +
           this.obsBlock(t.raDeg, t.decDeg) +
@@ -599,12 +602,13 @@ function sparkline(lc: LcPoint[], limits: LcLimit[] = []): string {
   }
   svg += `</svg>`;
   const bands = [...byBand.keys()].sort().map((f) => FID_BAND[f]).join('/');
-  const magSpan = lc.length
-    ? ` · ${Math.max(...lc.map((p) => p.mag)).toFixed(1)}→${Math.min(...lc.map((p) => p.mag)).toFixed(1)} mag`
+  const peak = lc.length
+    ? ` · ${Math.max(...lc.map((p) => p.mag)).toFixed(1)}→${Math.min(...lc.map((p) => p.mag)).toFixed(1)} mag` +
+      ` · peak ${formatFlux(abMagToMicroJy(Math.min(...lc.map((p) => p.mag))))}`
     : '';
   return (
     svg +
-    `<div style="color:#5f7494;font-size:10px">mag vs time · ${escapeHtml(bands)}${magSpan}` +
+    `<div style="color:#5f7494;font-size:10px">mag vs time · ${escapeHtml(bands)}${peak}` +
     (limits.length ? ` · ▽ ${limits.length} upper limits` : '') +
     `</div>`
   );
@@ -691,6 +695,28 @@ function fmtP(days: number): string {
 }
 
 /**
+ * Turns a cutout into a usable finder chart: N-up / E-left orientation marks (the standard
+ * hips2fits orientation) and a labelled scale bar sized to the field — what you'd take to the
+ * eyepiece or detector to identify the target.
+ */
+function finderOverlay(fovDeg: number): string {
+  const fieldAsec = fovDeg * 3600;
+  const nice = [1, 2, 5, 10, 15, 30, 60, 120, 300, 600];
+  let bar = nice[0]!;
+  for (const n of nice) if (n <= fieldAsec * 0.4) bar = n;
+  const frac = (bar / fieldAsec) * 100;
+  const label = bar < 60 ? `${bar}″` : `${bar / 60}′`;
+  const lab = 'font:600 9.5px system-ui,sans-serif;color:#cfe0ff;text-shadow:0 0 3px #000,0 0 5px #000;pointer-events:none';
+  return (
+    `<div style="position:absolute;top:3px;left:50%;transform:translateX(-50%);${lab}">N</div>` +
+    `<div style="position:absolute;left:4px;top:50%;transform:translateY(-50%);${lab}">E</div>` +
+    `<div style="position:absolute;left:7px;bottom:6px;width:${frac.toFixed(1)}%;min-width:22px;pointer-events:none">` +
+    `<div style="border-top:2px solid #cfe0ff;box-shadow:0 0 2px #000"></div>` +
+    `<div style="${lab};margin-top:1px">${label}</div></div>`
+  );
+}
+
+/**
  * AAVSO VSX catalogued-variable info + a cross-check of our measured period against the published
  * one — the kind of literature confirmation a researcher does by hand. Accepts the catalogue period,
  * its half, and its double (the usual Lomb–Scargle aliases) as a "match".
@@ -720,9 +746,11 @@ function vsxBlock(m: VsxMatch | null, measuredP: number | null): string {
 /** Light-curve CSV (detections + upper limits) as a download link — no backend, data: URI. */
 function csvLink(oid: string, lc: LcPoint[], limits: LcLimit[]): string {
   if (!lc.length && !limits.length) return '';
-  let csv = 'mjd,band,mag,mag_err,kind\n';
-  for (const p of lc) csv += `${p.mjd},${FID_BAND[p.fid] ?? p.fid},${p.mag},${p.magErr ?? ''},detection\n`;
-  for (const l of limits) csv += `${l.mjd},${FID_BAND[l.fid] ?? l.fid},${l.lim},,upper_limit\n`;
+  let csv = 'mjd,band,mag,mag_err,flux_uJy,kind\n';
+  for (const p of lc)
+    csv += `${p.mjd},${FID_BAND[p.fid] ?? p.fid},${p.mag},${p.magErr ?? ''},${abMagToMicroJy(p.mag).toFixed(4)},detection\n`;
+  for (const l of limits)
+    csv += `${l.mjd},${FID_BAND[l.fid] ?? l.fid},${l.lim},,${abMagToMicroJy(l.lim).toFixed(4)},upper_limit\n`;
   const uri = 'data:text/csv;base64,' + btoa(unescape(encodeURIComponent(csv)));
   return (
     `<a href="${uri}" download="${escapeHtml(oid)}_lightcurve.csv" ` +
