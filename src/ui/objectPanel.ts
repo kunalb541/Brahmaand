@@ -39,7 +39,7 @@ import {
 } from '../data/observability';
 import { getSimMs } from '../core/simTime';
 import type { BodyEphemeris } from '../data/ephemeris';
-import { lombScargle, phaseFold, type LSResult } from '../data/periodogram';
+import { lombScargleAsync, phaseFold, type LSResult } from '../data/periodogram';
 import { vsxConeSearch, vsxLink, type VsxMatch } from '../data/vsx';
 import { abMagToMicroJy, formatFlux } from '../data/photometry';
 
@@ -59,6 +59,8 @@ export class ObjectPanel {
   private panel: HTMLDivElement;
   private input: HTMLInputElement;
   private abort: AbortController | null = null;
+  // Lomb–Scargle is expensive — memoise per transient so rerenders (e.g. on a location change) reuse it
+  private lsCache: { oid: string; res: LSResult | null } | null = null;
 
   private rightPanel: HTMLElement;
 
@@ -144,7 +146,8 @@ export class ObjectPanel {
 
     const night = nightWindow(loc, now);
     const start = night.sunsetMs ?? now - 3 * 3600e3;
-    const end = night.sunriseMs ?? now + 9 * 3600e3;
+    let end = night.sunriseMs ?? now + 9 * 3600e3;
+    if (end <= start) end = start + 9 * 3600e3; // never let the SVG denominator invert (polar edge cases)
     const curve = altitudeCurve(raDeg, decDeg, loc, start, end, 10);
 
     // SVG altitude-vs-time curve (alt −10..90; horizon line; twilight shade; now marker)
@@ -379,14 +382,14 @@ export class ObjectPanel {
       `<div style="margin-top:6px;font-size:11px;line-height:1.6">` +
       `<div>distance: ${fmtDist}</div>` +
       `<div>angular diameter: ${ang}</div>` +
-      (b.magV != null ? `<div>magnitude: ${b.magV.toFixed(1)} <span style="color:#7f93b5">(approx.)</span></div>` : '') +
+      (b.magV != null ? `<div>magnitude: ${b.magV.toFixed(1)} <span style="color:#7f93b5">V</span></div>` : '') +
       (showPhase
         ? `<div>illuminated: ${(b.illum * 100).toFixed(0)}% · phase angle ${b.phaseAngleDeg.toFixed(0)}°</div>`
         : '') +
       `</div>` +
       this.obsBlock(b.raDeg, b.decDeg) +
       `<div style="margin-top:8px;color:#5f7494;font-size:10px;border-top:1px solid rgba(120,170,255,.12);padding-top:6px">` +
-      `Ephemeris: JPL approximate elements / truncated lunar theory — display-grade (≈ arcminutes), not for precise work</div>`;
+      `Ephemeris: astronomy-engine (VSOP87 / ELP) — J2000 ICRS, aberration-corrected, topocentric; ~arcsecond, validated vs JPL Horizons</div>`;
     this.rerender = () => this.showSolarBody(b);
     this.show(rows);
   }
@@ -399,7 +402,8 @@ export class ObjectPanel {
 
     const now = Date.now();
     const age = ageDays(t.lastMjd, now);
-    const lastSeen = mjdToDate(t.lastMjd).toISOString().slice(0, 10);
+    // guard a missing/garbage ANTARES timestamp — mjdToDate(NaN).toISOString() throws RangeError
+    const lastSeen = isFinite(t.lastMjd) ? mjdToDate(t.lastMjd).toISOString().slice(0, 10) : 'unknown';
     const cutout = cutoutUrl({ hipsId: 'CDS/P/DSS2/color', raDeg: t.raDeg, decDeg: t.decDeg, fovDeg: 0.05 });
 
     // ANTARES community-filter tags (the "fuller" info: classifier/quality filters that fired)
@@ -419,7 +423,7 @@ export class ObjectPanel {
       (t.cls ? `<div style="color:#ff9b6f;margin-top:2px">${escapeHtml(t.cls)}</div>` : '') +
       tagsHtml +
       `<div style="margin-top:6px;color:#bcd">${formatRaHms(t.raDeg)}&nbsp;&nbsp;${formatDecDms(t.decDeg)}</div>` +
-      `<div style="color:#7f93b5">last seen ${lastSeen} · ${age < 1 ? 'today' : Math.round(age) + ' d ago'} · ${t.ndet} detection${t.ndet === 1 ? '' : 's'}</div>`;
+      `<div style="color:#7f93b5">last seen ${lastSeen}${isFinite(age) ? ` · ${age < 1 ? 'today' : Math.round(age) + ' d ago'}` : ''} · ${t.ndet} detection${t.ndet === 1 ? '' : 's'}</div>`;
 
     this.show(head + `<div style="color:#7f93b5;margin-top:6px">loading light curve + classification…</div>` + this.transientFooter());
     try {
@@ -474,7 +478,7 @@ export class ObjectPanel {
             ([k, label]) =>
               `<figure style="flex:1;margin:0;min-width:0">` +
               `<div style="position:relative">` +
-              `<img src="${t.stamps![k]}" loading="lazy" alt="${label}" style="display:block;width:100%;aspect-ratio:1;` +
+              `<img src="${escapeHtml(t.stamps![k]!)}" loading="lazy" alt="${label}" style="display:block;width:100%;aspect-ratio:1;` +
               `object-fit:cover;border-radius:9px;background:#000${k === 'difference' ? ';border:1px solid rgba(111,227,255,.55)' : ''}">` +
               // reticle marking the candidate at the stamp centre — same object as the light curve
               `<div style="position:absolute;left:50%;top:50%;width:30%;height:30%;transform:translate(-50%,-50%);` +
@@ -489,16 +493,17 @@ export class ObjectPanel {
           `<div style="color:#5f7494;font-size:9.5px;margin-top:2px">image-subtraction stamps · newest alert</div>`;
       }
 
-      // Lomb–Scargle is Pro-only and the expensive step — compute once, reuse for the VSX comparison
-      const ls = isPro() ? dominantBandLS(lc.points) : null;
+      // Period search (Pro): pick the band synchronously now; run the multi-second Lomb–Scargle
+      // off the main thread below and patch the result in, so the panel never freezes.
+      const bandSel = isPro() ? selectDominantBand(lc.points) : null;
 
       this.show(
         head +
           mlHtml +
           crossmatchHtml(xmatch) +
-          vsxBlock(vsx, ls?.res.bestPeriodDays ?? null) +
+          `<span id="op-vsx">${vsxBlock(vsx, null)}</span>` +
           sparkline(lc.points, lc.limits) +
-          (ls ? periodBlock(ls) : '') + // research-grade period search → Pro
+          (bandSel ? `<div id="op-period" style="margin-top:8px;color:#5f7494;font-size:10px">⏳ computing period (Lomb–Scargle)…</div>` : '') +
           csvLink(t.oid, lc.points, lc.limits) +
           triptych +
           // finder chart: wide-field cutout + reticle + N/E orientation + scale bar (3′ field)
@@ -507,12 +512,27 @@ export class ObjectPanel {
           `<div style="position:absolute;left:50%;top:50%;width:34px;height:34px;margin:-17px 0 0 -17px;border:1.5px solid #6fe3ff;border-radius:50%;box-shadow:0 0 6px #6fe3ff,inset 0 0 4px #6fe3ff;pointer-events:none"></div>` +
           finderOverlay(0.05) +
           `</div>` +
-          `<div style="margin-top:8px"><a href="${objectPageUrl(t.oid)}" target="_blank" rel="noopener" style="color:#8aa6d6">${brokerName()} object ↗</a></div>` +
+          `<div style="margin-top:8px"><a href="${escapeHtml(objectPageUrl(t.oid))}" target="_blank" rel="noopener" style="color:#8aa6d6">${brokerName()} object ↗</a></div>` +
           this.obsBlock(t.raDeg, t.decDeg) +
           this.transientFooter(),
       );
       this.rerender = () => void this.showTransient(t);
       this.attachFits(t.raDeg, t.decDeg, 0.05);
+
+      // off-thread Lomb–Scargle, memoised per object; patch the period block + VSX comparison when ready
+      if (bandSel) {
+        let res = this.lsCache?.oid === t.oid ? this.lsCache.res : undefined;
+        if (res === undefined) {
+          res = await lombScargleAsync(bandSel.pts.map((p) => p.mjd), bandSel.pts.map((p) => p.mag), {}, ac.signal);
+          this.lsCache = { oid: t.oid, res };
+        }
+        if (ac.signal.aborted) return;
+        const ls: BandLS | null = res ? { res, band: bandSel.band, pts: bandSel.pts } : null;
+        const pEl = this.panel.querySelector('#op-period');
+        if (pEl) pEl.outerHTML = ls ? periodBlock(ls) : `<div style="margin-top:8px;color:#5f7494;font-size:10px">Lomb–Scargle: no resolvable period</div>`;
+        const vEl = this.panel.querySelector('#op-vsx');
+        if (vEl) vEl.innerHTML = vsxBlock(vsx, ls?.res.bestPeriodDays ?? null);
+      }
     } catch (e) {
       if ((e as Error).name !== 'AbortError') {
         this.show(head + `<div style="color:#f99;margin-top:6px">light curve unavailable</div>` + this.transientFooter());
@@ -625,17 +645,15 @@ interface BandLS {
   pts: LcPoint[];
 }
 
-/** Pick the best-sampled band and run Lomb–Scargle once (the expensive step, reused below). */
-function dominantBandLS(lc: LcPoint[]): BandLS | null {
+/** Pick the best-sampled band (cheap, synchronous). The expensive Lomb–Scargle runs off-thread. */
+function selectDominantBand(lc: LcPoint[]): { band: number; pts: LcPoint[] } | null {
   if (lc.length < 10) return null; // need enough detections to say anything about periodicity
   const byBand = new Map<number, LcPoint[]>();
   for (const p of lc) (byBand.get(p.fid) ?? byBand.set(p.fid, []).get(p.fid)!).push(p);
   let band = -1;
   let pts: LcPoint[] = [];
   for (const [f, ps] of byBand) if (ps.length > pts.length) { band = f; pts = ps; }
-  if (pts.length < 10) return null;
-  const res = lombScargle(pts.map((p) => p.mjd), pts.map((p) => p.mag));
-  return res ? { res, band, pts } : null;
+  return pts.length < 10 ? null : { band, pts };
 }
 
 function periodBlock(ls: BandLS): string {
@@ -725,7 +743,13 @@ function vsxBlock(m: VsxMatch | null, measuredP: number | null): string {
   if (!m) return '';
   const bits: string[] = [`<b style="color:#cdbcf0">${escapeHtml(m.type || 'variable')}</b>`];
   if (m.periodDays) bits.push(`P<sub>cat</sub> = ${fmtP(m.periodDays)}`);
-  if (m.maxMag && m.minMag) bits.push(`${escapeHtml(m.maxMag)}–${escapeHtml(m.minMag)}`);
+  // VSX MinMag is sometimes an amplitude in parentheses (e.g. "(0.88) g"), not a faint magnitude
+  if (m.maxMag) {
+    const mn = m.minMag.trim();
+    if (mn.startsWith('(')) bits.push(`${escapeHtml(m.maxMag)} · amp ${escapeHtml(mn)}`);
+    else if (mn) bits.push(`${escapeHtml(m.maxMag)}–${escapeHtml(mn)}`);
+    else bits.push(escapeHtml(m.maxMag));
+  }
   let cmp = '';
   if (measuredP && m.periodDays) {
     const r = measuredP / m.periodDays;

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   equatorialToHorizontal,
+  horizontalToEquatorial,
   airmass,
   riseTransitSet,
   lstDeg,
@@ -19,16 +20,28 @@ describe('observability', () => {
     expect(airmass(0)).toBe(Infinity);
   });
 
-  it('a target at the observer latitude transits near the zenith', () => {
-    // an object with Dec = latitude reaches alt ≈ 90° at transit
+  it('a target at the observer latitude transits near the zenith (of-date self-consistent)', () => {
+    // a J2000 object with Dec = latitude transits near (not exactly) the zenith — precession shifts
+    // its apparent dec by ~arcmin between J2000 and now, which the frame reconciliation applies.
     const loc = { latDeg: 30, lonDeg: 0 };
     const rts = riseTransitSet(120, 30, loc, T);
-    expect(rts.maxAltDeg).toBeCloseTo(90, 6);
     expect(rts.status).toBe('rises');
-    // at the computed transit, altitude should equal the max altitude
+    expect(rts.maxAltDeg).toBeGreaterThan(89.6);
+    expect(rts.maxAltDeg).toBeLessThanOrEqual(90);
+    // self-consistency invariant: the computed transit altitude equals maxAltDeg (both of-date)
     const h = equatorialToHorizontal(120, 30, loc, rts.transitMs!);
-    expect(h.altDeg).toBeCloseTo(90, 1);
+    expect(h.altDeg).toBeCloseTo(rts.maxAltDeg, 2);
     expect(Math.abs(h.hourAngleDeg)).toBeLessThan(0.5); // ~0 at transit
+  });
+
+  it('J2000 ⇄ alt/az round-trips (EQJ→EQD and EQD→EQJ rotations cancel)', () => {
+    const loc = { latDeg: 19.07, lonDeg: 72.87 };
+    const ra0 = 83.6, dec0 = 22.0; // J2000
+    const h = equatorialToHorizontal(ra0, dec0, loc, T);
+    const back = horizontalToEquatorial(h.altDeg, h.azDeg, loc, T);
+    expect(back.decDeg).toBeCloseTo(dec0, 4);
+    const dRa = ((back.raDeg - ra0 + 540) % 360) - 180;
+    expect(Math.abs(dRa)).toBeLessThan(2e-3);
   });
 
   it('marks circumpolar and never-rising targets', () => {
@@ -50,8 +63,12 @@ describe('observability', () => {
     expect(s.decDeg).toBeLessThan(23.6);
   });
 
-  it('transit altitude matches 90 − |lat − dec| for Greenwich', () => {
+  it('transit altitude ≈ 90 − |lat − dec| (within precession) and is self-consistent', () => {
     const rts = riseTransitSet(180, 20, greenwich, T);
-    expect(rts.maxAltDeg).toBeCloseTo(90 - Math.abs(51.4778 - 20), 6);
+    const naive = 90 - Math.abs(51.4778 - 20); // J2000 approximation (58.5222)
+    expect(rts.maxAltDeg).toBeGreaterThan(naive - 0.3); // of-date precession ≲ 0.2°
+    expect(rts.maxAltDeg).toBeLessThan(naive + 0.3);
+    const h = equatorialToHorizontal(180, 20, greenwich, rts.transitMs!);
+    expect(h.altDeg).toBeCloseTo(rts.maxAltDeg, 2); // both of-date → match tightly
   });
 });

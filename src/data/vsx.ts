@@ -47,8 +47,9 @@ export async function vsxConeSearch(
     const ra = Number(o['RA2000']);
     const dec = Number(o['Declination2000']);
     if (!isFinite(ra) || !isFinite(dec)) continue;
+    // VSX periods may carry a trailing uncertainty/qualifier (e.g. "0.566775:") → strip before parse
     const pStr = o['Period'];
-    const p = pStr != null && String(pStr).trim() !== '' ? Number(pStr) : NaN;
+    const p = pStr != null && String(pStr).trim() !== '' ? Number(String(pStr).replace(/[^0-9.eE+-].*$/, '')) : NaN;
     const m: VsxMatch = {
       name: String(o['Name'] ?? ''),
       type: String(o['VariabilityType'] ?? ''),

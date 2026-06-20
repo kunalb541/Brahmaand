@@ -15,9 +15,40 @@
  * Angles are radians internally; public results carry explicit units. Times are Unix ms (UTC).
  */
 
+import * as Astronomy from 'astronomy-engine';
+
 const DEG = Math.PI / 180;
 const RAD = 180 / Math.PI;
 const SIDEREAL_MS_PER_DEG = (86164.0905 / 360) * 1000; // mean sidereal day per degree of LST advance
+
+// FRAME RECONCILIATION: the world/catalog frame is J2000 ICRS, but sidereal time (GMST/LST) is
+// referred to the equinox OF DATE. Differencing a J2000 RA against LST omits J2000→now precession
+// (~46″/yr ≈ 0.34° by 2026), tilting the whole horizon/alt-az frame off the stars. We rotate RA/Dec
+// between J2000 (EQJ) and equator-of-date (EQD) at the alt/az boundary. Matrices cached per minute
+// (they drift ~arcsec/min). NOTE: the low-precision Sun (sunRaDec) is mean-equinox-OF-DATE already,
+// so its alt/az must NOT be rotated — callers pass j2000=false for it.
+let _rotBucket = NaN;
+let _eqjEqd: number[][] = [];
+let _eqdEqj: number[][] = [];
+function ensureRot(unixMs: number): void {
+  const bucket = Math.round(unixMs / 60000);
+  if (bucket === _rotBucket) return;
+  const time = Astronomy.MakeTime(new Date(bucket * 60000));
+  _eqjEqd = Astronomy.Rotation_EQJ_EQD(time).rot;
+  _eqdEqj = Astronomy.Rotation_EQD_EQJ(time).rot;
+  _rotBucket = bucket;
+}
+function rotRaDec(raDeg: number, decDeg: number, m: number[][]): { raDeg: number; decDeg: number } {
+  const ra = raDeg * DEG, dec = decDeg * DEG;
+  const x = Math.cos(dec) * Math.cos(ra), y = Math.cos(dec) * Math.sin(ra), z = Math.sin(dec);
+  const X = m[0]![0]! * x + m[1]![0]! * y + m[2]![0]! * z; // astronomy-engine RotateVector convention
+  const Y = m[0]![1]! * x + m[1]![1]! * y + m[2]![1]! * z;
+  const Z = m[0]![2]! * x + m[1]![2]! * y + m[2]![2]! * z;
+  return {
+    raDeg: ((Math.atan2(Y, X) * RAD) % 360 + 360) % 360,
+    decDeg: Math.atan2(Z, Math.hypot(X, Y)) * RAD,
+  };
+}
 
 export interface GeoLocation {
   latDeg: number;
@@ -95,7 +126,14 @@ export function equatorialToHorizontal(
   decDeg: number,
   loc: GeoLocation,
   unixMs: number,
+  j2000 = true, // input is J2000 ICRS (stars/planets); pass false for of-date input (the Sun)
 ): HorizontalCoord {
+  if (j2000) {
+    ensureRot(unixMs);
+    const od = rotRaDec(raDeg, decDeg, _eqjEqd); // J2000 → equator of date, to match LST
+    raDeg = od.raDeg;
+    decDeg = od.decDeg;
+  }
   const lst = lstDeg(unixMs, loc.lonDeg);
   let H = lst - raDeg; // hour angle, degrees
   H = (((H + 180) % 360) + 360) % 360 - 180; // wrap to [-180,180]
@@ -130,9 +168,10 @@ export function horizontalToEquatorial(
     -Math.sin(az) * Math.cos(alt),
     Math.sin(alt) * Math.cos(lat) - Math.cos(alt) * Math.sin(lat) * Math.cos(az),
   );
-  let ra = lstDeg(unixMs, loc.lonDeg) - H * RAD;
+  let ra = lstDeg(unixMs, loc.lonDeg) - H * RAD; // of-date RA (LST is of-date)
   ra = ((ra % 360) + 360) % 360;
-  return { raDeg: ra, decDeg: dec * RAD };
+  ensureRot(unixMs);
+  return rotRaDec(ra, dec * RAD, _eqdEqj); // of-date → J2000, matching the world/catalog frame
 }
 
 /** Kasten & Young (1989) relative air mass for a true altitude (deg). Infinity below the horizon. */
@@ -174,6 +213,12 @@ export function riseTransitSet(
   unixMs: number,
   h0Deg = -0.5667,
 ): RiseTransitSet {
+  // rotate the J2000 target to equator-of-date so RA matches LST (else transit/rise/set are off ~0.34°)
+  ensureRot(unixMs);
+  const od = rotRaDec(raDeg, decDeg, _eqjEqd);
+  raDeg = od.raDeg;
+  decDeg = od.decDeg;
+
   const lat = loc.latDeg * DEG;
   const dec = decDeg * DEG;
   const maxAlt = 90 - Math.abs(loc.latDeg - decDeg); // altitude at upper transit
@@ -214,15 +259,22 @@ export interface NightWindow {
 export function nightWindow(loc: GeoLocation, unixMs: number): NightWindow {
   const step = 5 * 60 * 1000;
   const sunAlt = (ms: number): number => {
-    const s = sunRaDec(ms);
-    return equatorialToHorizontal(s.raDeg, s.decDeg, loc, ms).altDeg;
+    const s = sunRaDec(ms); // of-date apparent Sun → do NOT rotate to J2000
+    return equatorialToHorizontal(s.raDeg, s.decDeg, loc, ms, /*j2000*/ false).altDeg;
   };
+  // Anchor the 24h scan at the most-recent local solar noon (Sun near upper transit) so it ALWAYS
+  // starts in daylight. Scanning forward from `unixMs` breaks at night: no sunset is seen, so the
+  // gated dawn/sunrise are never detected → empty altitude curve. (CRITICAL fix.)
+  const s0 = sunRaDec(unixMs);
+  let dH = lstDeg(unixMs, loc.lonDeg) - s0.raDeg; // Sun hour angle now (deg)
+  dH = ((dH % 360) + 360) % 360; // degrees since last solar transit
+  const anchor = unixMs - dH * SIDEREAL_MS_PER_DEG;
   let sunsetMs: number | null = null,
     sunriseMs: number | null = null,
     duskMs: number | null = null,
     dawnMs: number | null = null;
-  let prev = sunAlt(unixMs);
-  for (let t = unixMs + step; t <= unixMs + 24 * 3600 * 1000; t += step) {
+  let prev = sunAlt(anchor);
+  for (let t = anchor + step; t <= anchor + 24 * 3600 * 1000; t += step) {
     const a = sunAlt(t);
     if (sunsetMs === null && prev > -0.833 && a <= -0.833) sunsetMs = t;
     if (duskMs === null && prev > -18 && a <= -18) duskMs = t;

@@ -57,7 +57,13 @@ export class StarField {
     const buf = await (await fetch(binUrl)).arrayBuffer();
     const pos = new Float32Array(buf, 0, n * 3);
     const col = new Uint8Array(buf, n * 3 * 4, n * 3);
-    const mag = new Float32Array(buf, n * 3 * 4 + n * 3, n);
+    // the mag Float32 block starts at 15·n bytes — only 4-byte aligned when n%4===0. Realign by copy
+    // if a future catalogue's count breaks that (Float32Array requires a 4-byte-aligned offset).
+    const magOff = n * 3 * 4 + n * 3;
+    const mag =
+      magOff % 4 === 0
+        ? new Float32Array(buf, magOff, n)
+        : new Float32Array(buf.slice(magOff, magOff + n * 4));
 
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
@@ -108,7 +114,7 @@ export class StarField {
     const out: { ci: number; mag: number }[] = [];
     for (let i = 0; i < n; i += stride) {
       const m = mag.getX(i);
-      if (m === 0 || m < -15 || m > 20) continue; // sentinel / unphysical → no parallax
+      if (!Number.isFinite(m) || m < -15 || m > 20) continue; // unphysical absolute magnitude
       out.push({ ci: col.getX(i) - col.getZ(i), mag: m });
     }
     return out;

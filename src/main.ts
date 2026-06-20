@@ -1005,12 +1005,12 @@ const CLICK_CMDS: { label: string; id: string; key?: string }[] = [
   { label: 'Toggle constellations', id: 'toggle-const', key: 'c' },
   { label: 'Toggle star labels', id: 'toggle-stars', key: 'l' },
   { label: 'Toggle equatorial grid', id: 'toggle-grid', key: 'g' },
-  { label: 'Toggle ecliptic + precession', id: 'toggle-ecliptic', key: 'e' },
+  { label: 'Toggle ecliptic + precession', id: 'toggle-ecliptic', key: ',' }, // 'e' is a flight key
   { label: 'Toggle galactic plane', id: 'toggle-galactic' },
   { label: 'Toggle horizon grid', id: 'toggle-horizon', key: 'h' },
   { label: 'Toggle constellation boundaries', id: 'toggle-bounds', key: 'b' },
   { label: 'Toggle Messier objects', id: 'toggle-messier', key: 'm' },
-  { label: 'Toggle H–R (colour–magnitude) diagram', id: 'toggle-hr', key: 'd' },
+  { label: 'Toggle H–R (colour–magnitude) diagram', id: 'toggle-hr', key: 'r' }, // 'd' is a flight key
   { label: 'Toggle planets / Moon / Sun', id: 'toggle-solar', key: 'p' },
   { label: 'Toggle live alerts', id: 'toggle-alerts', key: 't' },
   { label: 'Cycle FOV framing circle', id: 'toggle-fov', key: 'f' },
@@ -1098,7 +1098,7 @@ palette.addEventListener('click', (e) => {
 
 addEventListener('keydown', (e) => {
   const tgt = e.target as HTMLElement;
-  const typing = tgt.tagName === 'INPUT' || tgt.tagName === 'TEXTAREA';
+  const typing = tgt.tagName === 'INPUT' || tgt.tagName === 'TEXTAREA' || tgt.tagName === 'SELECT' || tgt.isContentEditable;
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
     e.preventDefault();
     palette.style.display = 'block';
@@ -1114,7 +1114,7 @@ addEventListener('keydown', (e) => {
     (document.getElementById('obj-search') as HTMLInputElement).focus();
     return;
   }
-  const cmd = CLICK_CMDS.find((c) => c.key === e.key.toLowerCase() || (e.key === '?' && c.key === '?'));
+  const cmd = CLICK_CMDS.find((c) => c.key === e.key.toLowerCase());
   if (cmd) clickById(cmd.id);
 });
 

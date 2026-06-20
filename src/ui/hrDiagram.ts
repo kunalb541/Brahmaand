@@ -42,7 +42,12 @@ export class HrDiagram {
     const close = document.createElement('button');
     close.textContent = '✕';
     close.style.cssText = 'background:none;border:none;color:#9cc4ff;cursor:pointer;font-size:13px;margin-left:6px';
-    close.addEventListener('click', () => this.setVisible(false));
+    close.addEventListener('click', () => {
+      // keep the dock toggle's active state in sync (else the next click is a no-op → double-click)
+      const btn = document.getElementById('toggle-hr');
+      if (btn?.classList.contains('active')) btn.click();
+      else this.setVisible(false);
+    });
     bar.append(title, sub, close);
 
     this.canvas = document.createElement('canvas');
