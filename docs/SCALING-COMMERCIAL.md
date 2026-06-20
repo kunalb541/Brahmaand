@@ -2,7 +2,7 @@
 
 *Plain-language engineering + legal guidance, not legal advice. For anything commercial, confirm
 current terms with each provider (links in [USAGE-AND-LEGAL.md](USAGE-AND-LEGAL.md)) or a lawyer.
-Last reviewed 2026-06-13.*
+Last reviewed 2026-06-20.*
 
 This is the doc to read **before charging money or sending real traffic**. It has three parts:
 (1) can you sell it, (2) what licenses constrain you, (3) the load you put on other people's servers
@@ -28,6 +28,7 @@ is where conditions bite:
 | **ALeRCE / ANTARES** alert brokers | ✅ public streams, attribution | Credit the broker + the underlying ZTF / Rubin-LSST surveys + their classifiers. At scale, load is the issue (Part 3). |
 | **TNS** (Transient Name Server) | ⚠️ requires a registered bot + API key; terms restrict redistribution | Needs an account and a backend; don't hammer or rehost. |
 | Constellation lines (d3-celestial) | ✅ BSD-3 | Keep credit. |
+| **astronomy-engine** (bundled ephemeris library, Don Cross) | ✅ **MIT** | Code dependency, not data — commercial-friendly, **no blocker**. Powers the arcsecond Sun/Moon/planet positions (VSOP87/ELP, validated vs JPL Horizons). Keep the MIT notice. |
 
 **No-login / no-backend today = minimal privacy surface.** The only personal datum is *optional*
 device GPS for the "point at the sky" feature, used on-device and never transmitted. The moment you

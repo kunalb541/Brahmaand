@@ -27,6 +27,13 @@ in the app's UI (the in-app panels already do).
 | SIMBAD, Sesame, VizieR, hips2fits, MocServer | **CDS, Strasbourg** | Acknowledge CDS; respect ~5–6 req/s etiquette (the app rate-limits to 4/s). |
 | Transient alerts (when enabled) | ALeRCE (ZTF) / ANTARES, NOIRLab (Rubin/LSST + ZTF) brokers | Cite the broker and the underlying survey; see in-app credits. |
 
+## Bundled third-party code
+
+Distinct from the *data* above, the app bundles third-party **code** libraries, all permissively
+licensed and commercial-friendly: **astronomy-engine** (Don Cross — **MIT**; the VSOP87/ELP ephemeris
+behind the arcsecond Sun/Moon/planet positions), `three` (MIT), `healpix-ts` (MIT). These carry no
+attribution or share-alike obligation beyond keeping their licence notices — **no commercial blocker**.
+
 ## Practical implications
 
 - **Personal / educational / non-commercial use:** fine as bundled, with the attributions above.

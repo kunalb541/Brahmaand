@@ -19,9 +19,11 @@ Repo: **[github.com/kunalb541/Brahmaand](https://github.com/kunalb541/Brahmaand)
 >   streams live HiPS tiles from CDS, with exposure control and public-mode auto-survey.
 > - **747k real stars** — Gaia DR3 (638k) + HYG (109k brightest) vendored binaries with real
 >   parallax distances; fly through them with WASD/QE or a touch joystick, photometric exposure.
-> - **Solar system.** Sun, Moon (correct phase drawn, bright limb toward the Sun, topocentric
->   parallax when location is set) and all 7 planets from JPL approximate Keplerian elements
->   (valid 1800–2050) + truncated lunar theory; approximate magnitudes labelled as such; click any
+> - **Solar system, arcsecond-accurate.** Sun, Moon (correct phase drawn, bright limb toward the
+>   Sun, topocentric parallax when location is set) and all 7 planets via the **astronomy-engine**
+>   library (VSOP87/ELP, MIT, ~90 KB), validated to **arcseconds** against JPL Horizons. Positions
+>   are J2000 ICRS, aberration-corrected and topocentric when an observer location is set;
+>   magnitudes include Saturn's ring tilt; the Moon's illuminated fraction/phase is exact. Click any
 >   body for distance, angular diameter, illumination/phase and observability. **Accuracy is proven
 >   against real events:** unit tests reproduce the 2020-12-21 Jupiter–Saturn great conjunction and
 >   the 2017-08-21 total solar eclipse (geocentric *and* topocentric from the totality path).
@@ -41,6 +43,15 @@ Repo: **[github.com/kunalb541/Brahmaand](https://github.com/kunalb541/Brahmaand)
 >   an **ANTARES Streams explorer** (12 community tags, e.g. `nuclear_transient`, anomaly detectors),
 >   the **difference-image triptych** (science / template / difference), light curves with error
 >   bars + upper-limit arrows (g/r/i), ML class probabilities and real/bogus (drb) scores.
+> - **Period-finding (Pro).** A **Lomb-Scargle periodogram + phase-folding** runs on the best-sampled
+>   photometric band of any transient — the standard period-finder for unevenly-sampled survey light
+>   curves (variable stars, eclipsing binaries, RR Lyrae/Cepheids). Shows the periodogram and, when
+>   significant, the phase-folded curve with "P = … · FAP … · significant/tentative". Verified live
+>   on RR Lyrae ZTF18abntqrg → P = 7.89 h, FAP < 0.1%, corroborating the broker's "RRL 85%".
+> - **Light-curve CSV export** (detections + upper limits) as a no-backend download — all users.
+> - **Rendered horizon.** Stellarium/Star-Walk-style ground: a translucent ground hemisphere that
+>   dims the below-horizon sky, a bright horizon line and N/E/S/W cardinal markers, built from the
+>   observer location + time; works in look-around and phone-gyro modes; on the "Horizon" toggle.
 > - **FITS quantitative mode (Pro)** — real per-pixel values + WCS RA/Dec readout + scientific
 >   stretches (linear/log/√/asinh) and zscale, parsed accurately in-browser (no fake JPEG numbers).
 > - **Phone as a window on the sky.** Star-Walk-smooth gyro + compass + GPS register the view to
@@ -60,7 +71,7 @@ Repo: **[github.com/kunalb541/Brahmaand](https://github.com/kunalb541/Brahmaand)
 npm install
 npm run dev          # → http://localhost:5173  (look around the real sky)
 npm run build        # typecheck + production bundle into dist/
-npm test             # 22 unit tests (frames, ephemeris, observability, FITS)
+npm test             # 35 unit tests (frames, ephemeris, observability, FITS, periodogram, device-sky)
 
 # Native apps (Capacitor) — see docs/IOS.md and docs/ANDROID.md
 npm run ios:sync && npm run ios:open       # build web → open in Xcode → ▶ to your iPhone
@@ -150,8 +161,9 @@ Three pillars (original vision in [docs/00-vision.md](docs/00-vision.md)):
 
 Supporting features:
 
-- **Solar system + time machine** — Sun, Moon and planets from JPL approximate elements, driven by
-  a scrubable simulation clock (±1 s/s to ±1 yr/s); see status callout above.
+- **Solar system + time machine** — Sun, Moon and planets at arcsecond accuracy via astronomy-engine
+  (VSOP87/ELP, validated vs JPL Horizons), driven by a scrubable simulation clock (±1 s/s to ±1 yr/s);
+  see status callout above.
 - **Object info on click/tap** — solar-system body, else transient marker, else SIMBAD cone search;
   name search via Sesame; catalog overlays Gaia DR3 / 2MASS / AllWISE / Chandra via VizieR;
   hips2fits postage-stamp cutouts with a centre reticle on every popup — all CORS-open, called
@@ -191,6 +203,7 @@ flowchart LR
 | Language / build | TypeScript + Vite (`vanilla-ts`) | `typescript@6.0.3`, `vite@8.0.16` |
 | 3D engine | Three.js, **WebGLRenderer** | `three@0.184.0` + `@types/three@0.184.1` (pinned exactly, no `^`) |
 | HEALPix math | `healpix-ts` (MIT, Development Seed) | `1.1.0` |
+| Ephemeris | `astronomy-engine` (MIT, Don Cross; VSOP87/ELP) | `^2.1.19` |
 | Native shell | Capacitor (iOS via SPM — no CocoaPods; Android via Gradle) | `@capacitor/*@^8.4` |
 | Tests | Vitest | `3.2.4` |
 | Data pipeline | Node scripts in `tools/` (Gaia TAP, SIMBAD TAP, ALeRCE, ANTARES, HYG) | — |
@@ -226,9 +239,9 @@ of its spec — [docs/DECISIONS.md](docs/DECISIONS.md) records the exact deviati
 
 - **Phase: built, runnable & verified** on web + native iOS (Xcode `BUILD SUCCEEDED`, SPM, no
   CocoaPods) + native Android (`app-debug.apk` ~18 MB, `BUILD SUCCESSFUL`).
-- **22 unit tests passing** — coordinate frames (4), FITS parsing (4), observability (6), ephemeris
-  (8, including the 2020 great-conjunction and 2017 total-eclipse anchors). Typecheck clean,
-  production build green.
+- **35 unit tests passing** — coordinate frames (4), FITS parsing (4), observability (6), ephemeris
+  (8, including the 2020 great-conjunction and 2017 total-eclipse anchors), Lomb-Scargle periodogram
+  (4), device-sky/gyro (9). Typecheck clean, production build green.
 - **CI:** GitHub Actions runs typecheck + test + build on every push (green); Pages deploy only on
   manual dispatch (Pages not enabled yet).
 - **Remaining (optional polish):** NGC/IC deep catalogue, eclipse/conjunction finder UI, exoplanet

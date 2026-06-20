@@ -3,11 +3,12 @@
 *What a planetarium (Stellarium) and a consumer AR sky app (Star Walk) offer, mapped to Brahmaand:
 **have it ✅**, **feasible next ⏳** (accurate, client-side, no backend), **needs backend 🔌**, or
 **skip ⛔** (low value for our pro-first goal). Accuracy is non-negotiable — anything we add shows
-real, sourced numbers. Last updated 2026-06-13.*
+real, sourced numbers. Last updated 2026-06-20.*
 
 Where we already go **beyond** both: live all-sky transient alerts with ML classes + real/bogus +
-difference-image triptych + forced-photometry-style light curves; in-browser **FITS** with true
-pixel values + WCS; deep multi-wavelength HiPS surveys (DES/DECaPS/Rubin/JWST…); WebXR VR.
+difference-image triptych + forced-photometry-style light curves with **Lomb-Scargle period-finding
++ phase-folding** and **CSV export**; in-browser **FITS** with true pixel values + WCS; deep
+multi-wavelength HiPS surveys (DES/DECaPS/Rubin/JWST…); WebXR VR.
 
 ## Sky & imagery
 | Feature | Status |
@@ -22,7 +23,7 @@ pixel values + WCS; deep multi-wavelength HiPS surveys (DES/DECaPS/Rubin/JWST…
 ## Solar system — **DONE**
 | Feature | Status |
 |---|---|
-| Sun, Moon (with phase), planets at real positions | ✅ JPL approximate elements + truncated lunar theory; Moon topocentric parallax; tested against the 2020 great conjunction + 2017 eclipse |
+| Sun, Moon (with phase), planets at real positions | ✅ **arcsecond** positions via astronomy-engine (VSOP87/ELP), validated vs JPL Horizons; J2000 ICRS, aberration-corrected, Moon topocentric parallax + exact phase; tested against the 2020 great conjunction + 2017 eclipse |
 | Planet moons, rings | ⏳ after planets (Galilean moons, Titan…); Saturn ring hint drawn |
 | Comets (tails), asteroids/SSO | ⏳ partial — `sso_confirmed` ANTARES stream in the explorer; tails cosmetic |
 | Eclipse / transit / conjunction prediction | ⏳ finder UI; already reproducible manually via the time machine |
@@ -49,6 +50,7 @@ pixel values + WCS; deep multi-wavelength HiPS surveys (DES/DECaPS/Rubin/JWST…
 |---|---|
 | Coordinate grids (equatorial/galactic) | ✅ **(just added)** equatorial grid + ecliptic + galactic equator |
 | Horizon/azimuthal grid | ✅ (observer+time aware, rebuilt live) |
+| Rendered ground / landscape + cardinal points | ✅ translucent ground hemisphere dims the below-horizon sky + bright horizon line + N/E/S/W markers (Stellarium/Star-Walk style), look-around & gyro modes |
 | Celestial equator, ecliptic line | ✅ |
 | Precession circles | ✅ (with the ecliptic toggle) |
 | Constellations: lines | ✅ |
@@ -71,6 +73,8 @@ pixel values + WCS; deep multi-wavelength HiPS surveys (DES/DECaPS/Rubin/JWST…
 | Feature | Status |
 |---|---|
 | Live alert feed + ML class + real/bogus + light curve (errors, upper limits) | ✅ |
+| Period-finding: Lomb-Scargle periodogram + phase-folding (P · FAP) | ✅ (best-sampled band; verified RR Lyrae P=7.89 h, FAP<0.1%) |
+| Light-curve CSV export (detections + upper limits) | ✅ (no-backend download, all users) |
 | Difference-image triptych (science/template/difference) | ✅ |
 | Broker toggle ZTF(ALeRCE) ⇄ Rubin/LSST(ANTARES) | ✅ |
 | FITS quantitative mode (pixel value + WCS + stretch) | ✅ |

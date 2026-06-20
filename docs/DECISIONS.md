@@ -413,3 +413,60 @@ See [plan/AGENT_INSTRUCTIONS.md](../plan/AGENT_INSTRUCTIONS.md) §6.
 - **CI: Pages deploy is manual-dispatch-only.** "CI / Deploy" runs typecheck + tests + build on
   every push (green), but the deploy job only runs on `workflow_dispatch` — Pages isn't enabled
   yet, and gating it keeps pushes green instead of failing on a deploy step that can't succeed.
+
+## 2026-06-20 — Ephemeris: adopt astronomy-engine, retire the homegrown model
+
+- **Switched `src/data/ephemeris.ts` to the `astronomy-engine` library** (Don Cross, **MIT**,
+  ~90 KB, VSOP87/ELP-based) for Sun/Moon/planets, **replacing** the homegrown "JPL approximate
+  Keplerian elements + truncated lunar theory" of 2026-06-13. **Why:**
+  - **Accuracy jumps from arcminutes to arcseconds**, validated against **JPL Horizons**. The
+    homegrown elements were arcminute-class at best.
+  - **It fixes a real bug.** The approximate-elements code **omitted the JPL Table-2a correction
+    terms** (the periodic terms applied to Jupiter–Neptune), which caused **~54′ error for Uranus
+    and ~41′ for Neptune** — nearly a full degree, enough to put a planet in the wrong place at the
+    eyepiece. astronomy-engine's VSOP87 series has no such gap.
+  - **MIT licence** — commercial-friendly, no redistribution blocker (see DATA-LICENSES.md /
+    SCALING-COMMERCIAL.md). Small enough (~90 KB) to bundle without hurting the $0/static design.
+- **What the new ephemeris gives us:** Sun/Moon/planets in **J2000 ICRS**, **aberration-corrected**,
+  **topocentric** when an observer location is set; planet magnitudes that **include Saturn's ring
+  tilt**; the Moon's **illuminated fraction / phase exact** (no longer a truncated-theory
+  approximation). The whole solar-system/observability/horizon pipeline still reads the sim clock,
+  so nothing downstream changed.
+- **Verified live:** 2017 eclipse Sun–Moon separation 0.109°, new-moon illuminated fraction 0,
+  Saturn 0.24 mag, Neptune 7.82 mag, Moon 377447 km. The two historical anchors (2020 great
+  conjunction, 2017 total eclipse) still pass in the ephemeris unit tests.
+- **The homegrown model is retired** — the 2026-06-13 "approximate elements + lunar theory" entry
+  is superseded by this one. (Magnitudes are no longer labelled "approximate"; they're library
+  values to arcsecond-consistent precision.)
+
+## 2026-06-20 — Lomb-Scargle period-finding (browser-direct)
+
+- **Added a Lomb-Scargle periodogram + phase-folding** (`src/data/periodogram.ts`, unit-tested),
+  wired into the Pro transient/alert panel. **Why Lomb-Scargle:** it is *the* standard period
+  estimator for **unevenly-sampled** survey light curves — exactly what ZTF/LSST photometry is —
+  where a plain FFT can't be used. Covers the bread-and-butter periodic populations: variable
+  stars, eclipsing binaries, RR Lyrae / Cepheids.
+- **How it presents:** runs on the **best-sampled photometric band**, shows the periodogram and,
+  when the peak is significant, the **phase-folded light curve** plus
+  "P = … · FAP … · significant/tentative" (false-alarm probability gates the "significant" claim,
+  honouring the accuracy-first guardrail — a tentative peak is labelled tentative).
+- **Pure client math, no backend** — fits the $0/static design; no token, no proxy.
+- **Verified live** on RR Lyrae **ZTF18abntqrg** → **P = 7.89 h, FAP < 0.1%**, independently
+  corroborating the broker's ML classification "RRL 85%".
+
+## 2026-06-20 — Rendered horizon, CSV export, label gating, gyro + UI polish
+
+- **Rendered horizon** (`src/sky/horizon.ts`) instead of just the alt/az *grid*: a translucent
+  ground hemisphere below the horizon (dims the below-horizon sky), a bright horizon line, and
+  N/E/S/W cardinal markers, built from observer location + time — the Stellarium/Star-Walk ground
+  that makes "what's actually up right now" read instantly. Works in both look-around and phone-gyro
+  modes; on the existing "Horizon" toggle.
+- **Light-curve CSV export** (detections + upper limits) — a no-backend client download (Blob URL),
+  available to **all** users, so anyone can take the photometry into their own tools.
+- **Bug fix: Messier labels are now gated to the planetarium (Earth) view** — they were floating
+  over the deep-space flythrough where they're meaningless; now hidden once you leave Earth, like
+  the other Earth-view overlays.
+- **Gyro smoothing tuned smoother** (`SLERP_TAU` 0.13, `DRIFT_TAU` 2.5) — a small comfort tweak on
+  the device-sky filter.
+- **UI de-boxed** — panels softened (less boxy radii), modern sliders / dropdowns / scrollbars; a
+  visual-polish pass, no behavioural change.

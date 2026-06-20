@@ -2,7 +2,7 @@
 
 *Living plan. Goal: a sky app as **functional as Stellarium** but **modern**, **VR-ready**, and with
 **professional time-domain features** no consumer app has. Accuracy is non-negotiable — every number
-shown is real and sourced. Last updated 2026-06-13.*
+shown is real and sourced. Last updated 2026-06-20.*
 
 ---
 
@@ -34,12 +34,11 @@ shown is real and sourced. Last updated 2026-06-13.*
 
 **Latest wave — shipped since the above (2026-06-13):**
 - ✅ **Solar system** — Sun, Moon (correct phase drawn, bright limb toward the Sun, topocentric
-  parallax when a location is set) and the 7 planets, from JPL approximate Keplerian elements
-  (valid 1800–2050) + a truncated lunar theory (~1–2 arcmin). Approximate Müller/Meeus magnitudes,
-  labelled approximate. Click → panel with distance, angular diameter, illumination/phase,
-  observability. **Accuracy anchored by unit tests** reproducing the 2020-12-21 Jupiter–Saturn
-  great conjunction and the 2017-08-21 total solar eclipse (geocentric *and* topocentric from the
-  totality path).
+  parallax when a location is set) and the 7 planets. Click → panel with distance, angular diameter,
+  illumination/phase, observability. **Accuracy anchored by unit tests** reproducing the 2020-12-21
+  Jupiter–Saturn great conjunction and the 2017-08-21 total solar eclipse (geocentric *and*
+  topocentric from the totality path). *Now rewritten on **astronomy-engine** — see the precision
+  wave below.*
 - ✅ **Time machine** (`src/core/simTime.ts`) — time bar with −1d/+1d, rates ±1 s/s to ±1 yr/s,
   pause, click-date entry, ● Now; UI goes amber when warped. Drives the solar system, observability
   and the horizon grid.
@@ -63,6 +62,34 @@ shown is real and sourced. Last updated 2026-06-13.*
   with instant catch-up on visibility.
 - Tests now **22 passing** — frames (4), FITS (4), observability (6), ephemeris (8, incl. the two
   hard historical anchors). Typecheck clean; production build green.
+
+**Precision + research wave — shipped since the above:**
+- ✅ **Arcsecond ephemeris** — `src/data/ephemeris.ts` rewritten on the **astronomy-engine** library
+  (Don Cross, MIT, ~90 KB, VSOP87/ELP), validated to **arcseconds** vs JPL Horizons. This **replaced**
+  the homegrown "JPL approximate elements + truncated lunar theory" (~arcminutes), which had a real
+  bug: it omitted the JPL Table-2a correction terms, giving **~54′ error for Uranus and ~41′ for
+  Neptune** (nearly 1°). Now: Sun/Moon/planets are J2000 ICRS, aberration-corrected, topocentric when
+  an observer location is set; magnitudes include Saturn's ring tilt; the Moon's illuminated
+  fraction/phase is exact. Verified live (2017 eclipse Sun–Moon sep 0.109°, new-moon illum 0,
+  Saturn 0.24 mag, Neptune 7.82, Moon 377447 km).
+- ✅ **Lomb-Scargle period-finding** (`src/data/periodogram.ts`, unit-tested) — periodogram +
+  phase-folding wired into the Pro transient panel; runs on the best-sampled photometric band, shows
+  the periodogram and (when significant) the phase-folded light curve + "P = … · FAP …
+  · significant/tentative". The standard period-finder for unevenly-sampled survey light curves
+  (variable stars, eclipsing binaries, RR Lyrae/Cepheids). Verified live on RR Lyrae ZTF18abntqrg
+  → P = 7.89 h, FAP < 0.1%, corroborating the broker ML "RRL 85%".
+- ✅ **Light-curve CSV export** (detections + upper limits) — a no-backend download, available to all
+  users.
+- ✅ **Rendered horizon** (`src/sky/horizon.ts`) — Stellarium/Star-Walk-style ground: a translucent
+  ground hemisphere below the horizon (dims the below-horizon sky) + a bright horizon line + N/E/S/W
+  cardinal markers, built from observer location + time; works in both look-around and phone-gyro
+  modes; on the "Horizon" toggle.
+- ✅ **Messier-label gating bug fixed** — Messier labels were floating over deep-space flight; now
+  gated to the planetarium (Earth) view.
+- ✅ **Gyro smoothing tuned smoother** (`SLERP_TAU` 0.13, `DRIFT_TAU` 2.5).
+- ✅ **UI de-boxed** — panels softened (radii), modern sliders / dropdowns / scrollbars.
+- Tests now **35 passing** — frames (4), FITS (4), observability (6), ephemeris (8), Lomb-Scargle
+  periodogram (4), device-sky/gyro (9). Typecheck clean; production build green.
 
 ---
 
@@ -102,8 +129,9 @@ Rubin/LSST + ZTF** streams with a 37-tag taxonomy. That makes these feasible cli
    science|template|difference; plain `<img>`, GCS has no CORS). The core real/bogus vetting view.
 2. **Forced PSF photometry light curves** *(partial — honest status)* — the in-app light curve
    already shows detections with error bars, **upper-limit arrows (▽)** and g/r/i bands from the
-   ANTARES light-curve data (`ant_mag` empty + limiting mag, `ant_magerr`). Still pending: flux
-   (µJy) plotting with a magnitude/flux toggle. True forced photometry at a fixed position (incl.
+   ANTARES light-curve data (`ant_mag` empty + limiting mag, `ant_magerr`), and the curve (detections
+   + upper limits) is **exportable to CSV** (no backend, all users). Still pending: flux
+   (nJy/µJy) plotting with a magnitude/flux toggle. True forced photometry at a fixed position (incl.
    pre-discovery) is **not** client-feasible — ZTF/LSST forced-photometry services are token-gated
    → backend tier (see SCALING-COMMERCIAL.md).
 3. ✅ **Stream / tag explorer** *(landed)* — ANTARES **Streams dropdown** with 12 community tags
@@ -127,7 +155,11 @@ Rubin/LSST + ZTF** streams with a 37-tag taxonomy. That makes these feasible cli
 9. ✅ **FOV / framing + separation** *(landed)* — FOV framing circle at 5°/1°/30′/15′/5′ (true
    angular size) + two-click great-circle measure tool (°/′/″, chainable). Custom
    telescope+eyepiece/detector presets not built yet.
-10. ⏳ **Phase-folding** — fold periodic light curves on the catalog/feature period. Not started.
+10. ✅ **Period-finding + phase-folding** *(landed)* — a **Lomb-Scargle periodogram**
+    (`src/data/periodogram.ts`, unit-tested) on the best-sampled band finds the period; when
+    significant, the light curve is phase-folded and shown with "P = … · FAP …
+    · significant/tentative". The standard period-finder for unevenly-sampled survey light curves.
+    Verified live on RR Lyrae ZTF18abntqrg → P = 7.89 h, FAP < 0.1%.
 
 **VR for pros (grounded, not gimmick):**
 11. Immersive **local stellar volume** (real Gaia parallax) walk-through; **spatial alert triage**
@@ -158,9 +190,10 @@ Rubin/LSST + ZTF** streams with a 37-tag taxonomy. That makes these feasible cli
 - **P3 — stream/tag explorer + cross-match:** ✅ **done** — ANTARES Streams dropdown (ES DSL);
   cross-match via SIMBAD identify + Gaia DR3 / 2MASS / AllWISE / Chandra catalog overlays (VizieR).
   (Backend-gated TNS names excluded — see P5.)
-- **P4 — forced-photometry depth + flux units + phase-folding:** *partial* — error bars +
-  upper-limit arrows + g/r/i landed; flux (µJy) units and phase-folding still pending; true forced
-  photometry is token-gated → P5.
+- **P4 — forced-photometry depth + flux units + phase-folding:** *mostly done* — error bars +
+  upper-limit arrows + g/r/i, **Lomb-Scargle period-finding + phase-folding**, and **CSV export** all
+  landed; flux (nJy/µJy) units with a mag/flux toggle still pending; true forced photometry is
+  token-gated → P5.
 - **P5 — backend tier** *(unstarted; only if scaling/commercial)*: Kafka alert ingest, caching proxy,
   self-hosted catalogue + low-order HiPS, TNS/forced-phot tokens. See
   [SCALING-COMMERCIAL.md](SCALING-COMMERCIAL.md).
@@ -173,7 +206,32 @@ Rubin/LSST + ZTF** streams with a 37-tag taxonomy. That makes these feasible cli
 
 ---
 
-## 5. Guardrails
+## 5. Research roadmap — high-value pro / time-domain features (researched, not yet built)
+
+Surfaced as worth building next, each tagged by whether it can run **browser-direct** (no backend,
+fits the $0 design) or is **backend-gated** (CORS or auth blocks the browser → needs the P5 tier).
+
+**Browser-direct (no backend):**
+- **More Lomb-Scargle options** — multi-band combined periodograms, period-aliasing notes (the
+  natural extension of the period-finder that just landed).
+- **AAVSO VSX cross-match** — is this a known variable star? what type/period? Variable Star Index lookup.
+- **Observability / airmass planning** for a target across a night (we already have observability;
+  extend to multi-night/season planning).
+- **Finder charts** via an **Aladin Lite** embed.
+- **Colour-magnitude / HR diagram** from Gaia for a field or cluster.
+- **Flux ↔ AB-mag** conversion for Rubin, using `AB = 31.4 − 2.5·log10(flux_nJy)` (the mag/flux
+  toggle on light curves — see P4).
+
+**Backend-gated (CORS / auth → P5 tier):**
+- **TNS** name / classification / spectra resolution — needs a registered bot token + server (no CORS).
+- **SIMBAD / CDS Sesame cross-match** — CORS varies, so it needs a proxy.
+- **Watchlists / saved ANTARES ES-DSL queries** — server-side persistence + auth.
+- **Kafka live streaming** of alerts.
+- **Forced photometry** at a fixed position (ZTF/LSST forced-photometry services are token-gated).
+
+---
+
+## 6. Guardrails
 - **Accuracy first** — never show placeholder/fake values; label models vs measurements; show
   upper limits and uncertainties honestly.
 - **Be a good neighbor** to CDS/brokers — rate-limit, cache, back off (see SCALING-COMMERCIAL.md).
