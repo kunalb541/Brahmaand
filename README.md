@@ -46,9 +46,13 @@ Repo: **[github.com/kunalb541/Brahmaand](https://github.com/kunalb541/Brahmaand)
 > - **Period-finding (Pro).** A **Lomb-Scargle periodogram + phase-folding** runs on the best-sampled
 >   photometric band of any transient — the standard period-finder for unevenly-sampled survey light
 >   curves (variable stars, eclipsing binaries, RR Lyrae/Cepheids). Shows the periodogram and, when
->   significant, the phase-folded curve with "P = … · FAP … · significant/tentative". Verified live
->   on RR Lyrae ZTF18abntqrg → P = 7.89 h, FAP < 0.1%, corroborating the broker's "RRL 85%".
+>   significant, the phase-folded curve with "P = … · FAP … · significant/tentative". The frequency
+>   grid is sized to the data (so long survey baselines aren't undersampled). Verified live on RR
+>   Lyrae ZTF18abntqrg → P = 11.75 h (a textbook RRab period), FAP < 0.1%, corroborating "RRL 85%".
 > - **Light-curve CSV export** (detections + upper limits) as a no-backend download — all users.
+> - **Hertzsprung–Russell diagram.** A live colour–magnitude diagram built from the loaded Gaia DR3 +
+>   HYG catalogues (absolute magnitude vs colour) — the main sequence, red-giant branch and
+>   white-dwarf region from real data. Overlays toggle / `D` hotkey.
 > - **Rendered horizon.** Stellarium/Star-Walk-style ground: a translucent ground hemisphere that
 >   dims the below-horizon sky, a bright horizon line and N/E/S/W cardinal markers, built from the
 >   observer location + time; works in look-around and phone-gyro modes; on the "Horizon" toggle.
@@ -107,6 +111,7 @@ and `node tools/build-gaia.mjs` for the Gaia DR3 extract (live ESA Gaia TAP, no 
 |---|---|---|---|
 | `C` | constellation figures | `B` | IAU boundaries |
 | `L` | star labels | `M` | Messier objects |
+| `D` | H–R diagram | | |
 | `G` | equatorial grid | `E` | ecliptic |
 | `H` | horizon grid | `P` | planets |
 | `T` | live alerts | `F` | FOV circle |
