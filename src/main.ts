@@ -20,6 +20,7 @@ import { SolarSystemLayer } from './sky/solarSystem';
 import { solarSystemAt, angularSepDeg } from './data/ephemeris';
 import { getObserver, setObserver, acquireObserver, horizontalToEquatorial } from './data/observability';
 import { Horizon } from './sky/horizon';
+import { HrDiagram } from './ui/hrDiagram';
 import { getSimMs, getRate, setRate, setSimMs, resetToNow, isLive } from './core/simTime';
 import { StarLabels } from './sky/starLabels';
 import { StarField } from './stars/starField';
@@ -248,6 +249,10 @@ let messierOn = false;
   // visibility is owned by the render loop (gated on nearEarth) — don't set it here, or it would
   // flash for one frame if toggled while flying through deep space
 });
+(document.getElementById('toggle-hr') as HTMLButtonElement).addEventListener('click', (e) => {
+  const on = (e.currentTarget as HTMLButtonElement).classList.toggle('active');
+  hrDiagram.setVisible(on);
+});
 
 // --- Solar system (Sun, Moon with phase, planets) + the time machine ---
 const solar = new SolarSystemLayer(scene);
@@ -300,6 +305,7 @@ timeDisplay.addEventListener('click', () => {
 // Gaia DR3 (638k) is the deep field; HYG patches the very brightest naked-eye stars that
 // Gaia's ruwe/parallax cuts exclude (Sirius, Vega, …). Both render with one shared exposure.
 const fly = new FlyControls(rig, camera);
+const hrDiagram = new HrDiagram(); // colour–magnitude diagram, fed from the catalogues as they load
 const starFields: StarField[] = [];
 function loadField(bin: string, meta: string): void {
   StarField.load(bin, meta, maxPointSize())
@@ -307,6 +313,7 @@ function loadField(bin: string, meta: string): void {
       sf.setPixelScale(renderer.getDrawingBufferSize(new THREE.Vector2()).y);
       scene.add(sf.points);
       starFields.push(sf);
+      hrDiagram.addStars(sf.cmdSample(18000)); // feed the H–R diagram from real catalogue data
     })
     .catch((e) => console.warn(`star field ${bin} failed to load`, e));
 }
@@ -1003,6 +1010,7 @@ const CLICK_CMDS: { label: string; id: string; key?: string }[] = [
   { label: 'Toggle horizon grid', id: 'toggle-horizon', key: 'h' },
   { label: 'Toggle constellation boundaries', id: 'toggle-bounds', key: 'b' },
   { label: 'Toggle Messier objects', id: 'toggle-messier', key: 'm' },
+  { label: 'Toggle H–R (colour–magnitude) diagram', id: 'toggle-hr', key: 'd' },
   { label: 'Toggle planets / Moon / Sun', id: 'toggle-solar', key: 'p' },
   { label: 'Toggle live alerts', id: 'toggle-alerts', key: 't' },
   { label: 'Cycle FOV framing circle', id: 'toggle-fov', key: 'f' },

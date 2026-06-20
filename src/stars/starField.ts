@@ -94,4 +94,23 @@ export class StarField {
   setPixelScale(drawingBufferHeight: number): void {
     this.mat.uniforms.uPixScale!.value = drawingBufferHeight / 1080;
   }
+
+  /**
+   * Sample stars for a colour–magnitude (H–R) diagram: absolute magnitude + a colour index
+   * proxy (R−B from the temperature-derived render colour, monotonic in B−V / temperature).
+   * Stars with no real distance (absMag exactly 0 sentinel) are skipped.
+   */
+  cmdSample(max: number): { ci: number; mag: number }[] {
+    const col = this.points.geometry.getAttribute('aColor'); // normalized 0..1
+    const mag = this.points.geometry.getAttribute('aAbsMag');
+    const n = mag.count;
+    const stride = Math.max(1, Math.floor(n / max));
+    const out: { ci: number; mag: number }[] = [];
+    for (let i = 0; i < n; i += stride) {
+      const m = mag.getX(i);
+      if (m === 0 || m < -15 || m > 20) continue; // sentinel / unphysical → no parallax
+      out.push({ ci: col.getX(i) - col.getZ(i), mag: m });
+    }
+    return out;
+  }
 }
