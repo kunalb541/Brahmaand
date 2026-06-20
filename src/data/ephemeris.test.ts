@@ -12,7 +12,8 @@ describe('ephemeris — hard external anchors', () => {
     const j = body(t, 'jupiter');
     const s = body(t, 'saturn');
     const sep = angularSepDeg(j.raDeg, j.decDeg, s.raDeg, s.decDeg);
-    expect(sep).toBeLessThan(0.3); // true value ≈ 0.102°
+    expect(sep).toBeGreaterThan(0.08); // true value ≈ 0.102° at this instant
+    expect(sep).toBeLessThan(0.13); // arcsecond-accurate engine lands right on it
   });
 
   it('reproduces the 2017-08-21 total solar eclipse (geocentric near-conjunction, new moon)', () => {

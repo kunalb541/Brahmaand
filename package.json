@@ -24,6 +24,7 @@
     "@capacitor/haptics": "^8.0.2",
     "@capacitor/ios": "^8.4.0",
     "@capacitor/share": "^8.0.1",
+    "astronomy-engine": "^2.1.19",
     "healpix-ts": "^1.1.0",
     "three": "0.184.0"
   },

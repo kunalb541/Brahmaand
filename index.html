@@ -116,6 +116,36 @@
         width: 7px; height: 7px; border-radius: 50%; flex: none; box-shadow: 0 0 5px currentColor;
       }
 
+      /* ---- modern form controls (sliders, dropdowns) ---- */
+      input[type="range"] {
+        -webkit-appearance: none; appearance: none; height: 4px; border-radius: 999px;
+        background: rgba(255,255,255,.14); outline: none; cursor: pointer;
+      }
+      input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none; width: 15px; height: 15px; border-radius: 50%;
+        background: var(--accent); border: 2px solid #0b1220; box-shadow: 0 0 8px -2px var(--glow); cursor: pointer;
+      }
+      input[type="range"]::-moz-range-thumb {
+        width: 15px; height: 15px; border-radius: 50%; background: var(--accent); border: 2px solid #0b1220; cursor: pointer;
+      }
+      #dock select, #rightpanel select {
+        font: 11.5px system-ui, sans-serif; color: var(--text); cursor: pointer;
+        background: var(--btn); border: 1px solid var(--line-strong);
+        border-radius: var(--r-pill); padding: 5px 11px; outline: none; transition: background var(--t), border-color var(--t);
+      }
+      #dock select:hover { background: var(--btn-hover); }
+      #dock select:focus { border-color: var(--accent); }
+      #dock h2:hover { color: var(--text); }
+      details > summary { list-style: none; }
+      details > summary::-webkit-details-marker { display: none; }
+
+      /* subtle scrollbars (dock / right panel / feeds) */
+      #dock, #rightpanel, .feed { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.18) transparent; }
+      #dock::-webkit-scrollbar, #rightpanel::-webkit-scrollbar, .feed::-webkit-scrollbar { width: 7px; }
+      #dock::-webkit-scrollbar-thumb, #rightpanel::-webkit-scrollbar-thumb, .feed::-webkit-scrollbar-thumb {
+        background: rgba(255,255,255,.16); border-radius: 999px;
+      }
+
       #skyspace { flex: 1; position: relative; pointer-events: none; min-width: 0; }
       #skyspace > * { pointer-events: auto; }
 

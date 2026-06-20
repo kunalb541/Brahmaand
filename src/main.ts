@@ -1179,7 +1179,10 @@ startLoop(renderer, (dt) => {
       (boundaries.material as THREE.LineBasicMaterial).opacity = 0.38 * f;
       boundaries.visible = boundariesOn && f > 0.02;
     }
-    if (hudTick) messier.update(controls.fovDeg);
+    // Messier labels: only in the planetarium (Earth) view — fade out with the rest when flying to space
+    const showMessier = messierOn && nearEarth;
+    messier.setVisible(showMessier);
+    if (showMessier && hudTick) messier.update(controls.fovDeg);
 
     // reference grids/lines: pinned to the sky, shown only in the planetarium (Earth) view
     gridGroup.position.copy(rig.position);
