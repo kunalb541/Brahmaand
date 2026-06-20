@@ -83,7 +83,7 @@ export class HrDiagram {
     ctx.clearRect(0, 0, W, H);
 
     // fixed, physically-sensible axes so the shape is stable as catalogues stream in
-    const ciMin = -0.35, ciMax = 0.95; // (R−B): hot blue → cool red
+    const ciMin = -0.4, ciMax = 2.4; // colour index B−V / BP−RP: hot blue → cool red
     const magMin = -7, magMax = 17; // absolute magnitude (top = luminous)
     const PX = (ci: number) => PAD + ((ci - ciMin) / (ciMax - ciMin)) * (W - PAD - 12);
     const PY = (m: number) => 8 + ((m - magMin) / (magMax - magMin)) * (H - PAD - 8);

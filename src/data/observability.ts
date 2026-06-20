@@ -50,6 +50,14 @@ function rotRaDec(raDeg: number, decDeg: number, m: number[][]): { raDeg: number
   };
 }
 
+/** Rotate an equator-of-date RA/Dec (radians) → J2000 ICRS (radians). Used by the gyro horizon basis
+ * so the device sky-lock registers to the same J2000 frame as the stars. */
+export function ofDateToJ2000Rad(raRad: number, decRad: number, unixMs: number): { raRad: number; decRad: number } {
+  ensureRot(unixMs);
+  const r = rotRaDec(raRad * RAD, decRad * RAD, _eqdEqj);
+  return { raRad: r.raDeg * DEG, decRad: r.decDeg * DEG };
+}
+
 export interface GeoLocation {
   latDeg: number;
   lonDeg: number; // east-positive

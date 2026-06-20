@@ -69,7 +69,7 @@ function teffToRgb(t) {
 console.log(`fetching Gaia DR3 in ${RA_BANDS.length} RA bands (concurrency ${CONCURRENCY})…`);
 const bands = await runBands();
 
-const xs = [], cols = [], mags = [];
+const xs = [], cols = [], mags = [], cis = [];
 let kept = 0;
 for (const csv of bands) {
   const lines = csv.split(/\r?\n/);
@@ -96,15 +96,18 @@ for (const csv of bands) {
   const [rr, gg, bb] = teffToRgb(T);
   cols.push(Math.round(rr), Math.round(gg), Math.round(bb));
   mags.push(g - 5 * (Math.log10(d) - 1)); // absolute magnitude
+  cis.push(isFinite(bp_rp) ? bp_rp : NaN); // true Gaia BP−RP colour index for the H–R diagram
   kept++;
   }
 }
 
 const N = kept;
-const buf = new ArrayBuffer(N * 3 * 4 + N * 3 + N * 4);
+// posF32x3 | colU8x3 | absMagF32x1 | ciF32x1 (real BP−RP, not the lossy 8-bit render colour)
+const buf = new ArrayBuffer(N * 3 * 4 + N * 3 + N * 4 + N * 4);
 new Float32Array(buf, 0, N * 3).set(xs);
 new Uint8Array(buf, N * 3 * 4, N * 3).set(cols);
 new Float32Array(buf, N * 3 * 4 + N * 3, N).set(mags);
+new Float32Array(buf, N * 3 * 4 + N * 3 + N * 4, N).set(cis);
 
 mkdirSync('public/catalogs', { recursive: true });
 writeFileSync('public/catalogs/gaia.bin', Buffer.from(buf));
@@ -114,7 +117,7 @@ writeFileSync(
     count: N,
     units: 'parsec',
     frame: 'world (icrs.yzx)',
-    layout: ['posF32x3', 'colU8x3', 'absMagF32x1'],
+    layout: ['posF32x3', 'colU8x3', 'absMagF32x1', 'ciF32x1'],
     source: 'Gaia DR3 (ESA/Gaia/DPAC, CC BY-SA 3.0 IGO) · distances 1/parallax (parallax_over_error>5) · G<10.5',
   }),
 );

@@ -57,7 +57,7 @@ const col = (name) => header.indexOf(name);
 const iX = col('x'), iY = col('y'), iZ = col('z');
 const iDist = col('dist'), iMag = col('mag'), iAbs = col('absmag'), iCi = col('ci'), iId = col('id');
 
-const xs = [], cols = [], mags = [];
+const xs = [], cols = [], mags = [], cis = [];
 let kept = 0;
 for (let r = 1; r < lines.length; r++) {
   if (!lines[r]) continue;
@@ -74,17 +74,21 @@ for (let r = 1; r < lines.length; r++) {
   xs.push(y, z, x);
   cols.push(Math.round(rr), Math.round(gg), Math.round(bb));
   mags.push(isFinite(absmag) ? absmag : 5);
+  cis.push(isFinite(ci) ? ci : NaN); // true B−V colour index for the H–R diagram (NaN = unknown)
   kept++;
 }
 
 const N = kept;
-const buf = new ArrayBuffer(N * 3 * 4 + N * 3 + N * 4);
+// posF32x3 | colU8x3 | absMagF32x1 | ciF32x1 (real B−V, not the lossy 8-bit render colour)
+const buf = new ArrayBuffer(N * 3 * 4 + N * 3 + N * 4 + N * 4);
 const pos = new Float32Array(buf, 0, N * 3);
 const colU = new Uint8Array(buf, N * 3 * 4, N * 3);
 const mag = new Float32Array(buf, N * 3 * 4 + N * 3, N);
+const ciArr = new Float32Array(buf, N * 3 * 4 + N * 3 + N * 4, N);
 pos.set(xs);
 colU.set(cols);
 mag.set(mags);
+ciArr.set(cis);
 
 mkdirSync(OUT_DIR, { recursive: true });
 writeFileSync(`${OUT_DIR}/hyg.bin`, Buffer.from(buf));
@@ -94,7 +98,7 @@ writeFileSync(
     count: N,
     units: 'parsec',
     frame: 'world (icrs.yzx)',
-    layout: ['posF32x3', 'colU8x3', 'absMagF32x1'],
+    layout: ['posF32x3', 'colU8x3', 'absMagF32x1', 'ciF32x1'],
     source: 'HYG v4.1 (astronexus) — CC BY-SA 4.0',
   }),
 );

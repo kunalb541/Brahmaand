@@ -1,6 +1,19 @@
 import * as THREE from 'three';
 import type { LookControls } from './lookControls';
 import { raDecToWorld } from '../math/frames';
+import { ofDateToJ2000Rad } from '../data/observability';
+
+// Aim a basis vector at an equator-of-DATE (RA,Dec). The stars/world are J2000 ICRS, but LST is
+// of-date, so when we know the wall-clock time we rotate of-date→J2000 first (≈0.34° by 2026); the
+// test path passes no time and keeps the raw mapping.
+function aimOfDate(raRad: number, decRad: number, out: THREE.Vector3, unixMs?: number): void {
+  if (unixMs != null) {
+    const j = ofDateToJ2000Rad(raRad, decRad, unixMs);
+    raDecToWorld(j.raRad, j.decRad, out);
+  } else {
+    raDecToWorld(raRad, decRad, out);
+  }
+}
 
 /**
  * Phone "magic window": move the phone and the view follows the real sky — the way Stellarium
@@ -97,6 +110,7 @@ export function enuToSkyDir(
   latRad: number | null,
   lst: number | null,
   out: THREE.Vector3,
+  unixMs?: number,
 ): boolean {
   const cy = Math.cos(yaw);
   const sy = Math.sin(yaw);
@@ -111,9 +125,9 @@ export function enuToSkyDir(
     N = n2;
   }
   if (latRad != null && lst != null) {
-    raDecToWorld(lst + Math.PI / 2, 0, eVec);
-    raDecToWorld(lst, latRad, uVec);
-    raDecToWorld(lst + Math.PI, Math.PI / 2 - latRad, nVec);
+    aimOfDate(lst + Math.PI / 2, 0, eVec, unixMs);
+    aimOfDate(lst, latRad, uVec, unixMs);
+    aimOfDate(lst + Math.PI, Math.PI / 2 - latRad, nVec, unixMs);
     out
       .set(E * eVec.x + N * nVec.x + U * uVec.x, E * eVec.y + N * nVec.y + U * uVec.y, E * eVec.z + N * nVec.z + U * uVec.z)
       .normalize();
@@ -137,13 +151,14 @@ export function buildSkyQuat(
   latRad: number | null,
   lst: number | null,
   out: THREE.Quaternion,
+  unixMs?: number,
 ): boolean {
   const dev = deviceQuaternion(alpha, beta, gamma, orient);
   if (latRad != null && lst != null) {
-    // basis vectors of the (yaw-aligned) horizon frame in the celestial world frame
-    raDecToWorld(lst + Math.PI / 2, 0, eVec); // east horizon
-    raDecToWorld(lst, latRad, uVec); // zenith
-    raDecToWorld(lst + Math.PI, Math.PI / 2 - latRad, nVec); // north horizon
+    // basis vectors of the (yaw-aligned) horizon frame in the celestial world frame (J2000-corrected)
+    aimOfDate(lst + Math.PI / 2, 0, eVec, unixMs); // east horizon
+    aimOfDate(lst, latRad, uVec, unixMs); // zenith
+    aimOfDate(lst + Math.PI, Math.PI / 2 - latRad, nVec, unixMs); // north horizon
     eRot.copy(eVec).applyAxisAngle(uVec, yaw);
     nNeg.copy(nVec).applyAxisAngle(uVec, yaw).negate();
     mat.makeBasis(eRot, uVec, nNeg); // maps device axes (E,U,−N) → celestial
@@ -309,7 +324,8 @@ export class DeviceSky {
     }
 
     const yaw = this.compassSeed + this.azOffsetUser;
-    const lst = this.lonRad != null ? lstRad(Date.now(), this.lonRad) : null;
+    const nowMs = Date.now();
+    const lst = this.lonRad != null ? lstRad(nowMs, this.lonRad) : null;
     this.absolute = buildSkyQuat(
       e.alpha * DEG2RAD,
       e.beta * DEG2RAD,
@@ -319,6 +335,7 @@ export class DeviceSky {
       this.latRad,
       lst,
       this.targetQuat,
+      nowMs, // J2000-correct the horizon basis (matches the rendered horizon + stars)
     );
     this.hasTarget = true;
   }

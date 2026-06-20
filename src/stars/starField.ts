@@ -52,23 +52,26 @@ export class StarField {
   }
 
   static async load(binUrl: string, metaUrl: string, maxPointSize: number): Promise<StarField> {
-    const meta = (await (await fetch(metaUrl)).json()) as { count: number };
+    const meta = (await (await fetch(metaUrl)).json()) as { count: number; layout?: string[] };
     const n = meta.count;
     const buf = await (await fetch(binUrl)).arrayBuffer();
     const pos = new Float32Array(buf, 0, n * 3);
     const col = new Uint8Array(buf, n * 3 * 4, n * 3);
-    // the mag Float32 block starts at 15·n bytes — only 4-byte aligned when n%4===0. Realign by copy
-    // if a future catalogue's count breaks that (Float32Array requires a 4-byte-aligned offset).
+    // Float32 blocks start at 15·n bytes etc. — only 4-byte aligned when n%4===0. Realign by copy if
+    // a future catalogue's count breaks that (Float32Array requires a 4-byte-aligned offset).
+    const f32 = (off: number) => (off % 4 === 0 ? new Float32Array(buf, off, n) : new Float32Array(buf.slice(off, off + n * 4)));
     const magOff = n * 3 * 4 + n * 3;
-    const mag =
-      magOff % 4 === 0
-        ? new Float32Array(buf, magOff, n)
-        : new Float32Array(buf.slice(magOff, magOff + n * 4));
+    const mag = f32(magOff);
 
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
     geo.setAttribute('aColor', new THREE.BufferAttribute(col, 3, true));
     geo.setAttribute('aAbsMag', new THREE.BufferAttribute(mag, 1));
+    // optional true colour-index channel (real B−V / BP−RP) — for an accurate H–R diagram, not the
+    // lossy 8-bit render colour. Older binaries omit it (the reader falls back to R−B in cmdSample).
+    if (meta.layout?.includes('ciF32x1')) {
+      geo.setAttribute('aCI', new THREE.BufferAttribute(f32(magOff + n * 4), 1));
+    }
 
     const mat = new THREE.ShaderMaterial({
       vertexShader: STAR_VERT,
@@ -107,15 +110,19 @@ export class StarField {
    * Stars with no real distance (absMag exactly 0 sentinel) are skipped.
    */
   cmdSample(max: number): { ci: number; mag: number }[] {
-    const col = this.points.geometry.getAttribute('aColor'); // normalized 0..1
-    const mag = this.points.geometry.getAttribute('aAbsMag');
+    const geo = this.points.geometry;
+    const mag = geo.getAttribute('aAbsMag');
+    const trueCI = geo.getAttribute('aCI'); // real B−V / BP−RP if the binary carries it
+    const col = geo.getAttribute('aColor'); // fallback: lossy 8-bit render colour (normalized 0..1)
     const n = mag.count;
     const stride = Math.max(1, Math.floor(n / max));
     const out: { ci: number; mag: number }[] = [];
     for (let i = 0; i < n; i += stride) {
       const m = mag.getX(i);
       if (!Number.isFinite(m) || m < -15 || m > 20) continue; // unphysical absolute magnitude
-      out.push({ ci: col.getX(i) - col.getZ(i), mag: m });
+      const ci = trueCI ? trueCI.getX(i) : col.getX(i) - col.getZ(i);
+      if (!Number.isFinite(ci)) continue; // unknown colour
+      out.push({ ci, mag: m });
     }
     return out;
   }
