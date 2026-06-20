@@ -38,9 +38,14 @@ export function lombScargle(
 
   const minP = opts.minPeriod ?? 0.05; // ~72 min — fastest we bother searching
   const maxP = opts.maxPeriod ?? baseline; // can't constrain periods longer than the baseline
-  const samples = opts.samples ?? 3000;
   const fMin = 1 / maxP;
   const fMax = 1 / minP;
+  // CRITICAL: the grid must resolve the peak width (≈1/baseline), i.e. sample each of the
+  // ~(fMax−fMin)·baseline independent frequencies several times. A fixed grid silently misses
+  // the true peak on long survey baselines (e.g. a 0.33 d RR Lyrae over 1500 d → wrong period).
+  const OVERSAMPLE = 6;
+  const needed = Math.ceil(OVERSAMPLE * (fMax - fMin) * baseline);
+  const samples = opts.samples ?? Math.min(120000, Math.max(2000, needed));
 
   const mean = y.reduce((a, b) => a + b, 0) / n;
   let varSum = 0;

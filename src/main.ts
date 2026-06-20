@@ -245,7 +245,8 @@ function promptManualLocation(): void {
 let messierOn = false;
 (document.getElementById('toggle-messier') as HTMLButtonElement).addEventListener('click', (e) => {
   messierOn = (e.currentTarget as HTMLButtonElement).classList.toggle('active');
-  messier.setVisible(messierOn);
+  // visibility is owned by the render loop (gated on nearEarth) — don't set it here, or it would
+  // flash for one frame if toggled while flying through deep space
 });
 
 // --- Solar system (Sun, Moon with phase, planets) + the time machine ---

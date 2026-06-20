@@ -27,6 +27,23 @@ describe('Lomb–Scargle periodogram', () => {
     expect(res.fap).toBeLessThan(1e-3);
   });
 
+  it('recovers a short period on a LONG survey baseline (RR Lyrae over 1500 d)', () => {
+    // regression for the fixed-grid undersampling bug: 0.329 d signal, ZTF-like 1500-day baseline
+    const rand = rng(99);
+    const P = 0.329; // days — RR Lyrae
+    const t: number[] = [];
+    const y: number[] = [];
+    for (let i = 0; i < 400; i++) {
+      const ti = 1500 * rand();
+      t.push(ti);
+      y.push(16 + 0.5 * Math.sin((2 * Math.PI * ti) / P) + 0.05 * (rand() - 0.5));
+    }
+    const res = lombScargle(t, y, { minPeriod: 0.05, maxPeriod: 50 })!;
+    // must land on the true period (within 0.5%), not an alias
+    expect(Math.abs(res.bestPeriodDays - P) / P).toBeLessThan(0.005);
+    expect(res.fap).toBeLessThan(1e-3);
+  });
+
   it('reports a high false-alarm probability for pure noise', () => {
     const rand = rng(7);
     const t: number[] = [];
