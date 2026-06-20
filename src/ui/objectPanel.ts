@@ -38,6 +38,7 @@ import {
 } from '../data/observability';
 import { getSimMs } from '../core/simTime';
 import type { BodyEphemeris } from '../data/ephemeris';
+import { lombScargle, phaseFold } from '../data/periodogram';
 
 interface PanelOpts {
   flyTo: (raDeg: number, decDeg: number, extended: boolean) => void;
@@ -116,7 +117,7 @@ export class ObjectPanel {
     const loc = getObserver();
     const btn =
       'cursor:pointer;font:inherit;font-size:11px;color:#dcebff;background:rgba(40,70,130,.5);' +
-      'border:1px solid rgba(120,170,255,.3);border-radius:6px;padding:4px 9px;margin-top:6px';
+      'border:1px solid rgba(120,170,255,.3);border-radius:9px;padding:4px 9px;margin-top:6px';
     const wrap = (inner: string): string =>
       `<details style="margin-top:8px;border-top:1px solid rgba(120,170,255,.12);padding-top:6px">` +
       `<summary style="cursor:pointer;color:#9cc4ff;font-size:11px">Observability${loc ? '' : ' — set location'}</summary>` +
@@ -160,7 +161,7 @@ export class ObjectPanel {
         ? `<circle cx="${xOf(rts.transitMs).toFixed(1)}" cy="${yOf(rts.maxAltDeg).toFixed(1)}" r="2.5" fill="#9cc4ff"/>`
         : '';
     const svg =
-      `<svg viewBox="0 0 ${W} ${H}" style="width:100%;margin-top:7px;background:rgba(0,0,0,.3);border-radius:6px">` +
+      `<svg viewBox="0 0 ${W} ${H}" style="width:100%;margin-top:7px;background:rgba(0,0,0,.3);border-radius:9px">` +
       twilight +
       `<line x1="0" y1="${horizonY}" x2="${W}" y2="${horizonY}" stroke="rgba(150,170,200,.4)" stroke-dasharray="3 3"/>` +
       `<polyline points="${pts}" fill="none" stroke="#6fbcff" stroke-width="1.6"/>` +
@@ -270,7 +271,7 @@ export class ObjectPanel {
     rowsHtml.push(
       `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">` +
         `<b style="font-size:13px;color:#fff">${escapeHtml(hit.mainId)}</b>` +
-        `<span style="background:rgba(90,140,230,.5);border-radius:5px;padding:1px 6px;font-size:10px">${escapeHtml(otype)}</span></div>`,
+        `<span style="background:rgba(90,140,230,.5);border-radius:8px;padding:1px 6px;font-size:10px">${escapeHtml(otype)}</span></div>`,
     );
     rowsHtml.push(`<div style="color:#9cc4ff;margin-top:2px">${escapeHtml(otypeLabel(otype))}</div>`);
     rowsHtml.push(
@@ -313,7 +314,7 @@ export class ObjectPanel {
       `<div style="position:relative;margin-top:8px">` +
         `<img src="${cutout}" loading="lazy" alt="cutout" ` +
         `onerror="this.onerror=null;this.src='${cutoutAlt}'" ` +
-        `style="display:block;width:100%;border-radius:8px;background:#000;aspect-ratio:1">` +
+        `style="display:block;width:100%;border-radius:11px;background:#000;aspect-ratio:1">` +
         `<div style="position:absolute;left:50%;top:50%;width:34px;height:34px;margin:-17px 0 0 -17px;` +
         `border:1.5px solid #6fe3ff;border-radius:50%;box-shadow:0 0 6px #6fe3ff,inset 0 0 4px #6fe3ff;pointer-events:none"></div>` +
         `</div>`,
@@ -339,7 +340,7 @@ export class ObjectPanel {
     btn.textContent = label;
     btn.style.cssText =
       'display:block;margin-top:8px;font:11px ui-monospace,monospace;color:#dcebff;background:rgba(40,70,130,.45);' +
-      'border:1px solid rgba(120,170,255,.3);border-radius:6px;padding:4px 8px;cursor:pointer';
+      'border:1px solid rgba(120,170,255,.3);border-radius:9px;padding:4px 8px;cursor:pointer';
     let view: HTMLElement | null = null;
     btn.addEventListener('click', () => {
       if (view) {
@@ -402,7 +403,7 @@ export class ObjectPanel {
       ? `<div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:4px">${t.tags
           .map(
             (g) =>
-              `<span style="background:rgba(90,140,230,.35);border-radius:5px;padding:1px 6px;font-size:9.5px;color:#dce">${escapeHtml(g)}</span>`,
+              `<span style="background:rgba(90,140,230,.35);border-radius:8px;padding:1px 6px;font-size:9.5px;color:#dce">${escapeHtml(g)}</span>`,
           )
           .join('')}</div>`
       : '';
@@ -410,7 +411,7 @@ export class ObjectPanel {
     const head =
       `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">` +
       `<b style="font-size:13px;color:#fff">${escapeHtml(t.oid)}</b>` +
-      `<span style="background:rgba(60,200,210,.35);border-radius:5px;padding:1px 6px;font-size:10px">alert</span></div>` +
+      `<span style="background:rgba(60,200,210,.35);border-radius:8px;padding:1px 6px;font-size:10px">alert</span></div>` +
       (t.cls ? `<div style="color:#ff9b6f;margin-top:2px">${escapeHtml(t.cls)}</div>` : '') +
       tagsHtml +
       `<div style="margin-top:6px;color:#bcd">${formatRaHms(t.raDeg)}&nbsp;&nbsp;${formatDecDms(t.decDeg)}</div>` +
@@ -429,7 +430,7 @@ export class ObjectPanel {
       const best = bestClass(probs);
       if (best) {
         mlHtml +=
-          `<div style="margin-top:6px"><span style="background:rgba(120,90,230,.4);border-radius:5px;padding:1px 7px;font-size:11px">` +
+          `<div style="margin-top:6px"><span style="background:rgba(120,90,230,.4);border-radius:8px;padding:1px 7px;font-size:11px">` +
           `${escapeHtml(best.cls)} ${(best.prob * 100).toFixed(0)}%</span>` +
           `<span style="color:#7f93b5;font-size:10px"> · ML: ${escapeHtml(best.classifier)}</span></div>`;
         if (isPro()) {
@@ -468,7 +469,7 @@ export class ObjectPanel {
               `<figure style="flex:1;margin:0;min-width:0">` +
               `<div style="position:relative">` +
               `<img src="${t.stamps![k]}" loading="lazy" alt="${label}" style="display:block;width:100%;aspect-ratio:1;` +
-              `object-fit:cover;border-radius:6px;background:#000${k === 'difference' ? ';border:1px solid rgba(111,227,255,.55)' : ''}">` +
+              `object-fit:cover;border-radius:9px;background:#000${k === 'difference' ? ';border:1px solid rgba(111,227,255,.55)' : ''}">` +
               // reticle marking the candidate at the stamp centre — same object as the light curve
               `<div style="position:absolute;left:50%;top:50%;width:30%;height:30%;transform:translate(-50%,-50%);` +
               `border:1.5px solid #6fe3ff;border-radius:50%;box-shadow:0 0 4px #6fe3ff;pointer-events:none"></div>` +
@@ -486,10 +487,12 @@ export class ObjectPanel {
         head +
           mlHtml +
           sparkline(lc.points, lc.limits) +
+          (isPro() ? periodBlock(lc.points) : '') + // research-grade period search → Pro
+          csvLink(t.oid, lc.points, lc.limits) +
           triptych +
           // wide-field context cutout with a reticle marking the alert position
           `<div style="position:relative;margin-top:8px">` +
-          `<img src="${cutout}" loading="lazy" alt="field" style="display:block;width:100%;border-radius:8px;background:#000;aspect-ratio:1">` +
+          `<img src="${cutout}" loading="lazy" alt="field" style="display:block;width:100%;border-radius:11px;background:#000;aspect-ratio:1">` +
           `<div style="position:absolute;left:50%;top:50%;width:34px;height:34px;margin:-17px 0 0 -17px;border:1.5px solid #6fe3ff;border-radius:50%;box-shadow:0 0 6px #6fe3ff,inset 0 0 4px #6fe3ff;pointer-events:none"></div>` +
           `</div>` +
           `<div style="margin-top:8px"><a href="${objectPageUrl(t.oid)}" target="_blank" rel="noopener" style="color:#8aa6d6">${brokerName()} object ↗</a></div>` +
@@ -558,7 +561,7 @@ function sparkline(lc: LcPoint[], limits: LcLimit[] = []): string {
   const byBand = new Map<number, LcPoint[]>();
   for (const p of lc) (byBand.get(p.fid) ?? byBand.set(p.fid, []).get(p.fid)!).push(p);
 
-  let svg = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;margin-top:8px;background:rgba(0,0,0,.3);border-radius:6px">`;
+  let svg = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;margin-top:8px;background:rgba(0,0,0,.3);border-radius:9px">`;
   // upper limits first (under the detections): downward arrow at the limiting magnitude
   for (const l of limits) {
     const color = BAND_COLOR[l.fid] ?? '#9cc4ff';
@@ -595,5 +598,85 @@ function sparkline(lc: LcPoint[], limits: LcLimit[] = []): string {
     `<div style="color:#5f7494;font-size:10px">mag vs time · ${escapeHtml(bands)}${magSpan}` +
     (limits.length ? ` · ▽ ${limits.length} upper limits` : '') +
     `</div>`
+  );
+}
+
+/**
+ * Lomb–Scargle period search + phase fold — research-grade time-domain analysis on the photometry
+ * the broker already returned. Runs on the best-sampled band; reports the peak period with its
+ * Horne–Baliunas false-alarm probability and (when significant) the phase-folded light curve.
+ */
+function periodBlock(lc: LcPoint[]): string {
+  if (lc.length < 10) return ''; // need enough detections to say anything about periodicity
+  const byBand = new Map<number, LcPoint[]>();
+  for (const p of lc) (byBand.get(p.fid) ?? byBand.set(p.fid, []).get(p.fid)!).push(p);
+  let band = -1;
+  let pts: LcPoint[] = [];
+  for (const [f, ps] of byBand) if (ps.length > pts.length) { band = f; pts = ps; }
+  if (pts.length < 10) return '';
+
+  const res = lombScargle(pts.map((p) => p.mjd), pts.map((p) => p.mag));
+  if (!res) return '';
+  const sig = res.fap < 0.01;
+  const W = 264, H = 70, pad = 9;
+
+  // periodogram: power vs period (log-x)
+  const lpMin = Math.log10(Math.min(...res.periods));
+  const lpMax = Math.log10(Math.max(...res.periods));
+  const pwMax = Math.max(...res.power) || 1;
+  const PX = (p: number) => pad + ((Math.log10(p) - lpMin) / (lpMax - lpMin || 1)) * (W - 2 * pad);
+  const PY = (pw: number) => H - pad - (pw / pwMax) * (H - 2 * pad);
+  const stepN = Math.max(1, Math.floor(res.periods.length / W));
+  let d = '';
+  for (let i = 0; i < res.periods.length; i += stepN) {
+    d += `${i ? 'L' : 'M'}${PX(res.periods[i]!).toFixed(1)} ${PY(res.power[i]!).toFixed(1)} `;
+  }
+  const bx = PX(res.bestPeriodDays);
+  let out =
+    `<svg viewBox="0 0 ${W} ${H}" style="width:100%;margin-top:8px;background:rgba(0,0,0,.3);border-radius:9px">` +
+    `<line x1="${bx.toFixed(1)}" y1="${pad}" x2="${bx.toFixed(1)}" y2="${H - pad}" stroke="#ffd27a" stroke-width="1" opacity=".6" stroke-dasharray="2 2"/>` +
+    `<path d="${d}" fill="none" stroke="#6fb0e0" stroke-width="1.1"/></svg>`;
+
+  // phase fold (only meaningful when the peak is significant)
+  if (sig) {
+    const color = BAND_COLOR[band] ?? '#9cc4ff';
+    const ph = phaseFold(pts.map((p) => p.mjd), res.bestPeriodDays);
+    const mags = pts.map((p) => p.mag);
+    const m0 = Math.min(...mags), m1 = Math.max(...mags);
+    const FX = (x: number) => pad + (x / 2) * (W - 2 * pad);
+    const FY = (m: number) => pad + ((m - m0) / (m1 - m0 || 1)) * (H - 2 * pad); // bright at top
+    let pf = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;margin-top:4px;background:rgba(0,0,0,.3);border-radius:9px">`;
+    for (let i = 0; i < ph.length; i++) {
+      const y = FY(mags[i]!).toFixed(1);
+      pf += `<circle cx="${FX(ph[i]!).toFixed(1)}" cy="${y}" r="1.8" fill="${color}"/>`;
+      pf += `<circle cx="${FX(ph[i]! + 1).toFixed(1)}" cy="${y}" r="1.8" fill="${color}" opacity=".5"/>`;
+    }
+    out += pf + `</svg>`;
+  }
+
+  const Pd = res.bestPeriodDays;
+  const pstr = Pd < 1 ? `${(Pd * 24).toFixed(2)} h` : `${Pd.toFixed(3)} d`;
+  const fapStr = res.fap < 1e-3 ? '<0.1%' : `${(res.fap * 100).toFixed(1)}%`;
+  const verdict = sig
+    ? `<span style="color:#7fe0a0">significant — phase-folded below</span>`
+    : `<span style="color:#e0a060">tentative (likely aperiodic)</span>`;
+  return (
+    out +
+    `<div style="color:#5f7494;font-size:10px">Lomb–Scargle · ${escapeHtml(FID_BAND[band] ?? String(band))}-band, ${pts.length} pts · ` +
+    `P = ${pstr} · FAP ${fapStr} · ${verdict}</div>`
+  );
+}
+
+/** Light-curve CSV (detections + upper limits) as a download link — no backend, data: URI. */
+function csvLink(oid: string, lc: LcPoint[], limits: LcLimit[]): string {
+  if (!lc.length && !limits.length) return '';
+  let csv = 'mjd,band,mag,mag_err,kind\n';
+  for (const p of lc) csv += `${p.mjd},${FID_BAND[p.fid] ?? p.fid},${p.mag},${p.magErr ?? ''},detection\n`;
+  for (const l of limits) csv += `${l.mjd},${FID_BAND[l.fid] ?? l.fid},${l.lim},,upper_limit\n`;
+  const uri = 'data:text/csv;base64,' + btoa(unescape(encodeURIComponent(csv)));
+  return (
+    `<a href="${uri}" download="${escapeHtml(oid)}_lightcurve.csv" ` +
+    `style="display:inline-block;margin-top:8px;color:#8aa6d6;border:1px solid rgba(120,170,255,.3);` +
+    `border-radius:999px;padding:3px 11px;font-size:10.5px;text-decoration:none">⬇ light curve CSV</a>`
   );
 }

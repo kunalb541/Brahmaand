@@ -27,7 +27,7 @@ export function createFitsView(opts: {
   const SIZE = 200; // native FITS pixels fetched (kept modest: 200²×4 B ≈ 160 kB)
 
   const root = document.createElement('div');
-  root.style.cssText = 'margin-top:8px;border:1px solid rgba(120,170,255,.2);border-radius:8px;padding:8px;background:rgba(0,0,0,.25)';
+  root.style.cssText = 'margin-top:8px;border:1px solid rgba(120,170,255,.2);border-radius:11px;padding:8px;background:rgba(0,0,0,.25)';
 
   const head = document.createElement('div');
   head.style.cssText = 'display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:10px;color:#9cc4ff';
@@ -42,7 +42,7 @@ export function createFitsView(opts: {
   canvasWrap.style.cssText = 'position:relative;margin-top:6px';
   const canvas = document.createElement('canvas');
   canvas.style.cssText =
-    'display:block;width:100%;border-radius:6px;background:#000;aspect-ratio:1;image-rendering:pixelated;cursor:crosshair;touch-action:none';
+    'display:block;width:100%;border-radius:9px;background:#000;aspect-ratio:1;image-rendering:pixelated;cursor:crosshair;touch-action:none';
   canvasWrap.appendChild(canvas);
   const reticle = document.createElement('div');
   reticle.style.cssText =
@@ -87,7 +87,7 @@ export function createFitsView(opts: {
     b.textContent = s;
     b.style.cssText =
       'font:9px ui-monospace,monospace;color:#dcebff;background:rgba(40,70,130,.45);' +
-      'border:1px solid rgba(120,170,255,.3);border-radius:4px;padding:2px 5px;cursor:pointer';
+      'border:1px solid rgba(120,170,255,.3);border-radius:7px;padding:2px 5px;cursor:pointer';
     if (s === stretch) b.style.background = 'rgba(90,140,230,.7)';
     b.addEventListener('click', () => {
       stretch = s;

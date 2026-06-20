@@ -7,7 +7,7 @@
 const S = {
   h: 'margin:14px 0 4px;color:#9cc4ff;font-size:12px;letter-spacing:.06em;text-transform:uppercase',
   p: 'margin:4px 0;color:#bcd;font-size:12px;line-height:1.55',
-  k: 'background:rgba(120,170,255,.16);border:1px solid rgba(120,170,255,.3);border-radius:4px;padding:0 5px;font-size:11px',
+  k: 'background:rgba(120,170,255,.16);border:1px solid rgba(120,170,255,.3);border-radius:7px;padding:0 5px;font-size:11px',
   ol: 'margin:4px 0 4px 18px;padding:0;color:#bcd;font-size:12px;line-height:1.6',
 };
 
@@ -83,7 +83,7 @@ export function initHelpPanel(): void {
     `<p style="margin:14px 0 0;font-size:11px;color:#5f7494">Full docs: docs/IOS.md · docs/ANDROID.md · docs/USAGE-AND-LEGAL.md in the ` +
     `<a href="https://github.com/kunalb541/Brahmaand" target="_blank" rel="noopener" style="color:#8aa6d6">repository ↗</a></p>` +
     `<button id="help-close" style="margin-top:12px;font:inherit;font-size:12px;cursor:pointer;color:#dcebff;` +
-    `background:rgba(40,70,130,.5);border:1px solid rgba(120,170,255,.3);border-radius:6px;padding:5px 12px">Close</button>` +
+    `background:rgba(40,70,130,.5);border:1px solid rgba(120,170,255,.3);border-radius:9px;padding:5px 12px">Close</button>` +
     `</div>`;
   document.body.appendChild(modal);
 

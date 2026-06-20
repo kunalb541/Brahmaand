@@ -932,6 +932,7 @@ addEventListener('hashchange', applyViewHash);
   scene,
   camera,
   controls,
+  objectPanel,
   rig,
   fly,
   transientLayer,
