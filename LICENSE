@@ -19,10 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
-----------------------------------------------------------------------------
-
-The MIT license above covers the ORIGINAL SOURCE CODE of this project only.
-Bundled astronomical data and imagery, and data fetched at runtime from third
-parties, are licensed separately by their providers — see DATA-LICENSES.md.
-That file is part of the required attribution; keep it with any redistribution.

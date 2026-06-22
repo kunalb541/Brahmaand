@@ -1,9 +1,9 @@
 {
-  "name": "vr-astronomy-app",
+  "name": "brahmaand",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Desktop-first, VR-ready real-imagery astronomy app (PHASE-0 + PHASE-1).",
+  "description": "Real-sky astronomy app — real-imagery sky atlas + real-distance 3D star-field flythrough, solar system, time machine and pro time-domain tools. Web, iOS, Android and WebXR VR. TypeScript + Vite + Three.js, fed by public astronomy services.",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",

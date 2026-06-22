@@ -5,7 +5,7 @@ dist/
 .vite/
 tools/pipeline/.venv/
 tools/pipeline/data/
-data-src/
+# data-src/hyg.csv (raw HYG v4.1 source for the star pipeline) IS committed — see DATA-LICENSES.md
 # Capacitor native projects ARE committed (ios/, android/) — their own template
 # .gitignores exclude build artifacts (Pods, build/, synced web assets, .gradle…)
 .capacitor/
