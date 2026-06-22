@@ -106,7 +106,7 @@ These are out of scope. Do not build them, do not architect speculative hooks fo
    BSD-3-Clause data files are the noted source).
 8. No ingestion of GPL/AGPL/LGPL code (Aladin Lite, Stellarium Web Engine, Celestia) — reading for
    algorithms is allowed, copying is banned. See
-   [research/existing-projects.md](research/existing-projects.md).
+   [research/existing-projects.md](../research/existing-projects.md).
 
 ## 5. UX walkthrough
 

@@ -21,8 +21,8 @@ WebXR**, fed entirely by public data services, with **no backend in v1**:
 Plus object info/search (SIMBAD/VizieR/Sesame/hips2fits, all browser-direct), a WebXR "Enter VR"
 mode (developed headset-free via the Immersive Web Emulator), and $0/month static hosting.
 
-The end state and feature detail live in [docs/00-vision.md](../docs/00-vision.md). The "why" behind
-every technical choice lives in the research dumps under [docs/research/](../docs/research/).
+The end state and feature detail live in [docs/00-vision.md](../blueprint/00-vision.md). The "why" behind
+every technical choice lives in the research dumps under [docs/research/](../research/).
 
 ---
 
@@ -31,7 +31,7 @@ every technical choice lives in the research dumps under [docs/research/](../doc
 1. **This file** (AGENT_INSTRUCTIONS.md) — how to work.
 2. [ROADMAP.md](../ROADMAP.md) — milestones M0–M8, dependency graph, effort/risk. Pick the
    lowest-numbered incomplete milestone.
-3. [docs/00-vision.md](../docs/00-vision.md) and [docs/01-architecture.md](../docs/01-architecture.md)
+3. [docs/00-vision.md](../blueprint/00-vision.md) and [docs/01-architecture.md](../blueprint/01-architecture.md)
    — the what and the shape (modules, scene graph, coordinate frames, protocol seams).
 4. **The current phase's runbook** in `plan/` (see §3 for the canonical mapping) — your step-by-step
    for this milestone.
@@ -76,14 +76,14 @@ Dependency notes that break strict sequence:
 2. **No backend in v1.** Everything runs in the browser or in the offline Python pipeline. The only
    conditional server is a ~15-line stateless caching proxy for alert brokers, and *only* if their
    CORS turns out closed (PHASE-7 VERIFY). If you find yourself wanting a server, stop and re-read
-   the non-goals in [docs/00-vision.md](../docs/00-vision.md).
+   the non-goals in [docs/00-vision.md](../blueprint/00-vision.md).
 3. **Never present unverified data as fact.** Scientific honesty is a product principle: real data
    only; label anything simulated, modelled, or uncertain in the UI.
 4. **Pin dependencies exactly.** No `^`/`~` ranges. The versions in [README.md](../README.md) "Tech
    stack" and each phase file are pinned for a reason (Three.js has no semver; r-version churn
-   breaks `examples/jsm` imports — see [docs/07-pitfalls.md](../docs/07-pitfalls.md)).
+   breaks `examples/jsm` imports — see [docs/07-pitfalls.md](../blueprint/07-pitfalls.md)).
 5. **Performance budgets are gates, not suggestions.** The tables in
-   [docs/06-performance.md](../docs/06-performance.md) (and echoed in each phase) must hold. A phase
+   [docs/06-performance.md](../blueprint/06-performance.md) (and echoed in each phase) must hold. A phase
    isn't done if it's over budget.
 6. **Every phase ends green before the next begins:** all of the phase's acceptance-test table
    passes, **plus** `pnpm typecheck && pnpm lint && pnpm test && pnpm build` clean. Do not start
@@ -92,7 +92,7 @@ Dependency notes that break strict sequence:
    (`feat(sky): …`, `test(healpix): …`, `chore(ci): …`). Small, reviewable commits.
 8. **License hygiene:** **never copy code from GPL/AGPL/LGPL projects** (Aladin Lite, Stellarium Web
    Engine — reference/learning only). Only WWT and OpenSpace (MIT) are copy-from sources. See
-   [docs/research/existing-projects.md](../docs/research/existing-projects.md) for the license gate.
+   [docs/research/existing-projects.md](../research/existing-projects.md) for the license gate.
 9. **Zero steady-state allocation in the frame loop.** Preallocate scratch objects; no `new`,
    spreads, or closures inside `setAnimationLoop`. Verified with the DevTools allocation timeline.
 10. **Attribution is mandatory.** Display `obs_copyright` from HiPS `properties`; credit

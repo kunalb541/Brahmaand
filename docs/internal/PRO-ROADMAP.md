@@ -195,7 +195,7 @@ first task.
    this source** (for Chrome/Drive/Gmail) → back → **Install** → open **Brahmaand**.
 4. Debug APK never expires; Play Protect may show a one-time "install anyway".
 
-*(Also see [docs/IOS.md](IOS.md) and [docs/ANDROID.md](ANDROID.md).)*
+*(Also see [docs/IOS.md](../IOS.md) and [docs/ANDROID.md](../ANDROID.md).)*
 
 ---
 

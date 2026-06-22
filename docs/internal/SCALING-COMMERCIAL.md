@@ -1,7 +1,7 @@
 # Brahmaand — commercial use, data licensing & server-load at scale
 
 *Plain-language engineering + legal guidance, not legal advice. For anything commercial, confirm
-current terms with each provider (links in [USAGE-AND-LEGAL.md](USAGE-AND-LEGAL.md)) or a lawyer.
+current terms with each provider (links in [USAGE-AND-LEGAL.md](../USAGE-AND-LEGAL.md)) or a lawyer.
 Last reviewed 2026-06-20.*
 
 This is the doc to read **before charging money or sending real traffic**. It has three parts:
@@ -103,5 +103,5 @@ the app for everyone, and is poor scientific-community citizenship.
 > Kafka through a backend** at scale, cache + back off everywhere, and tell providers who you are.
 > Below ~a few hundred users you're a normal consumer; above that you need the backend tier above.
 
-See also [USAGE-AND-LEGAL.md](USAGE-AND-LEGAL.md) (attribution text + who-can-use table) and the
+See also [USAGE-AND-LEGAL.md](../USAGE-AND-LEGAL.md) (attribution text + who-can-use table) and the
 "If this scales" section there.

@@ -1,7 +1,7 @@
 # Decision log
 
 One line per non-trivial decision: date · what · why. Newest at the bottom.
-See [plan/AGENT_INSTRUCTIONS.md](../plan/AGENT_INSTRUCTIONS.md) §6.
+See [plan/AGENT_INSTRUCTIONS.md](plan/AGENT_INSTRUCTIONS.md) §6.
 
 ## 2026-06-12 — Implementation kickoff (PHASE-0 + PHASE-1)
 
