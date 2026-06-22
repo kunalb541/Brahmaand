@@ -4,8 +4,7 @@
 //
 // Positions are stored in WORLD frame (parsecs): world = (hyg.y, hyg.z, hyg.x), i.e. the
 // icrs.yzx swizzle the sky uses — so bright stars coincide with the HiPS imagery at the Sun.
-// (The full PHASE-4 pipeline stores ICRS + swizzles at runtime; this demo bakes world coords
-//  for simplicity — see docs/DECISIONS.md.)
+// World coordinates are baked at build time.
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 
 const SRC = 'data-src/hyg.csv';

@@ -1,8 +1,8 @@
-// Dense all-sky ZTF snapshot from the ALeRCE broker (the LSST-precursor stream the project was
-// built against). Instead of a cone grid (which ALeRCE throttles hard), we pull the most RECENT
-// objects of each lc_classifier class — one request per class, spaced out. That yields a dense,
-// ALREADY-CLASSIFIED, all-sky population (each object keeps its ML class for marker colouring),
-// which is exactly what the app wants. Re-runnable nightly (PHASE-8 cron). → public/transients/tonight.json
+// Dense all-sky ZTF snapshot from the ALeRCE broker (an LSST-precursor stream). Instead of a cone
+// grid (which ALeRCE throttles hard), we pull the most RECENT objects of each lc_classifier class
+// — one request per class, spaced out. That yields a dense, ALREADY-CLASSIFIED, all-sky population
+// (each object keeps its ML class for marker colouring), which is exactly what the app wants.
+// Re-runnable nightly. → public/transients/tonight.json
 import { writeFileSync, mkdirSync } from 'node:fs';
 
 const ALERCE = 'https://api.alerce.online/ztf/v1/objects/';

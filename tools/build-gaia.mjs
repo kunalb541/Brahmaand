@@ -1,17 +1,14 @@
-// PHASE-4 (pragmatic): build a real Gaia DR3 star catalogue via the ESA TAP async service,
-// with Bailer-Jones geometric/photogeometric distances, into the same binary format the
-// runtime already consumes (posF32x3 | colU8x3 | absMagF32). ~639k stars at G<10.5.
+// Build a compact Gaia DR3 star catalogue from the ESA Gaia TAP service, into the same binary
+// format the runtime already consumes (posF32x3 | colU8x3 | absMagF32). ~639k stars at G<10.5.
 //
-// This is the blueprint's PHASE-4 in miniature: single magnitude-limited extract (no octree
-// chunking / no ESA account needed at this size), Bailer-Jones distances (never 1/parallax),
-// Gaia colours. See docs/04-star-catalog-pipeline.md for the full multi-million-star design.
+// This is a single magnitude-limited extract (no octree chunking / no ESA account needed at
+// this size), using Bailer-Jones distances (never 1/parallax) and Gaia colours.
 import { writeFileSync, mkdirSync } from 'node:fs';
 
 const TAP = 'https://gea.esac.esa.int/tap-server/tap/sync';
 // Bright, high-S/N subset (parallax_over_error > 5): distance = 1000/parallax is reliable
 // here (~<20% error), so we skip the heavy Bailer-Jones external join (which exceeds the
-// anonymous async limit). The full faint catalogue would use Bailer-Jones — see
-// docs/04-star-catalog-pipeline.md and docs/DECISIONS.md.
+// anonymous async limit). A full faint catalogue would use Bailer-Jones distances instead.
 //
 // The anonymous async job errors on the full 639k result, and a single sync call caps near
 // 100k rows, so we partition by RA into bands fetched in parallel (disjoint → no dedup).

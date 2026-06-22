@@ -1,4 +1,4 @@
-// Brahmaand service worker (PHASE-8): offline app shell + cached catalogs/textures, plus a
+// Brahmaand service worker: offline app shell + cached catalogs/textures, plus a
 // capped cache for CORS-fetched CDS HiPS tiles. Dynamic data (SIMBAD/ALeRCE/Sesame) is never
 // cached. Bump CACHE_VERSION to invalidate. Registered only in production (see main.ts).
 const CACHE_VERSION = 'brahmaand-v1';

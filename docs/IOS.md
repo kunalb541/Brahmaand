@@ -1,16 +1,15 @@
 # Building Brahmaand for iPhone / iPad
 
 Brahmaand runs as a real native app via **Capacitor** — the *same* `dist/` web build wrapped in a
-WKWebView with native plugins (geolocation, haptics, share, app lifecycle; push next). The native
+WKWebView with native plugins (geolocation, haptics, share, app lifecycle). The native
 Xcode project is **committed at [`ios/`](../ios)** and uses **Swift Package Manager** (no
 CocoaPods needed). Config: [`capacitor.config.ts`](../capacitor.config.ts).
 
-> **Status 2026-06-13:** ✅ **the iOS app compiles** — `xcodebuild` for the iphonesimulator SDK
-> returns **BUILD SUCCEEDED** with Xcode 26.5 (SPM resolves capacitor-swift-pm + the geolocation
-> plugin; no CodeSign needed for the simulator), with the current feature set including the solar
-> system and time machine. The permission strings (`NSLocationWhenInUseUsageDescription`,
-> `NSMotionUsageDescription`) are already in `Info.plist`. The steps below add your phone + free
-> signing; the in-app Help (?) carries the same steps.
+The iOS app builds with a current Xcode (`xcodebuild` for the iphonesimulator SDK returns
+**BUILD SUCCEEDED**; SPM resolves capacitor-swift-pm + the geolocation plugin, and no CodeSign is
+needed for the simulator). The permission strings (`NSLocationWhenInUseUsageDescription`,
+`NSMotionUsageDescription`) are already in `Info.plist`. The steps below add your phone + free
+signing; the in-app Help (?) carries the same steps.
 
 ## One-time setup
 
@@ -37,22 +36,16 @@ In Xcode:
 
 After any web-code change: `npm run ios:sync`, then ▶ in Xcode again.
 
-## Pro vs Public listings
-
-One codebase, two experiences (`src/config/mode.ts`): the in-app **◆ PRO ⇄ ◇ Explore** toggle, or
-bake a default per listing by pointing the native shell at `index.html?mode=pro` /
-`?mode=public` (two app targets / two listings later).
-
 ## Live-reload during development (optional)
 
 1. `npm run dev -- --host` (note the LAN URL, e.g. `http://192.168.1.20:5173`).
 2. In `capacitor.config.ts` set `server: { url: 'http://<that-ip>:5173', cleartext: true }`,
    `npm run ios:sync`, run from Xcode. Revert before a release build.
 
-## What native unlocks (roadmap — docs/ROADMAP-V2.md)
+## What native unlocks
 
 - **No CORS** — call the ESA archive / any service directly.
-- **Push notifications** — transient/watchlist alerts (needs $99 + APNs).
+- **Push notifications** — transient/watchlist alerts (needs the paid Apple Developer Program + APNs).
 - **CoreMotion + compass** — true "hold the phone up to the sky" (small Swift plugin).
 - **Core Location** — hemisphere-aware observation planning (plugin already installed).
 - **Offline** — catalogs/textures ship in the bundle; tile cache via the service worker.

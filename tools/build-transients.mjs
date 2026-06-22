@@ -1,7 +1,7 @@
 // Ingest a recent all-sky alert snapshot from the ANTARES broker (NOIRLab) — the REAL Rubin/LSST
 // stream (+ ZTF), with community-filter tags. ANTARES's recent-sorted + paginated query is fast
 // and CORS-open (unlike ALeRCE's throttled cone grid), so a few pages give a solid all-sky
-// baseline. The runtime tops this up LIVE near the view. Re-runnable nightly (PHASE-8 cron).
+// baseline. The runtime tops this up LIVE near the view. Re-runnable nightly.
 import { writeFileSync, mkdirSync } from 'node:fs';
 
 const ANTARES = 'https://api.antares.noirlab.edu/v1';

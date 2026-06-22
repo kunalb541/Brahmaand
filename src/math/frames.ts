@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { TAU } from './angles';
 
 /**
- * The single source of frame truth (see plan/PHASE-1-sky-sphere.md §1).
+ * The single source of frame truth.
  *
  * World axes (Three.js, right-handed, Y-up):
  *   +Y = north celestial pole (Dec +90)

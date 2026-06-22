@@ -43,6 +43,6 @@ attribution or share-alike obligation beyond keeping their licence notices — *
 - **Going public or commercial:** the HYG-derived catalogue obliges **ShareAlike** (a redistributed
   catalogue must stay CC BY-SA), and the **Mellinger** texture would need to be removed or licensed.
   Everything else is permissive with attribution.
-- If you regenerate the catalogue from the full Gaia pipeline (PHASE-4), the result mixes
+- If you regenerate the catalogue from the full Gaia pipeline, the result mixes
   ESA/Gaia/DPAC (CC BY-SA 3.0 IGO) with ATHYG (CC BY-SA 4.0) — publish those chunks under CC BY-SA
-  and keep both credits (see `docs/DECISIONS.md`).
+  and keep both credits.

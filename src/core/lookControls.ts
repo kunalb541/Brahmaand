@@ -4,7 +4,7 @@ import { raDecToWorld } from '../math/frames';
 const EULER = new THREE.Euler(0, 0, 0, 'YXZ'); // module scratch — zero per-frame alloc
 
 /**
- * Inertial look-around from the centre of the sky sphere (plan/PHASE-1 §4).
+ * Inertial look-around from the centre of the sky sphere.
  * yaw=0 looks along +Z (RA 0, Dec 0); up-axis is +Y (north celestial pole).
  * Drag scale follows FOV so panning feels right when zoomed in.
  */

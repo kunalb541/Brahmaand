@@ -2,7 +2,7 @@ import * as THREE from 'three';
 
 /**
  * Renderer factory — the single construction site (the designed swap point for a future
- * WebGPU renderer; see ROADMAP "What could change this plan"). WebGLRenderer for now.
+ * WebGPU renderer). WebGLRenderer for now.
  */
 export function createRenderer(canvas: HTMLCanvasElement): THREE.WebGLRenderer {
   const renderer = new THREE.WebGLRenderer({

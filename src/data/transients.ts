@@ -2,7 +2,7 @@
  * Live transient ("what changed in the sky") provider. Browser-direct, CORS-verified
  * 2026-06-12 against the ALeRCE broker (ZTF alert stream — the LSST precursor survey).
  *
- * Design note (see docs/DECISIONS.md): the Rubin/LSST broker endpoints
+ * Design note: the Rubin/LSST broker endpoints
  * (api-lsst.alerce.online) are live but their /list_objects 500s and the full-table
  * lastmjd sort times out. The CONE search is fast (spatially indexed) and reliable, so the
  * app queries transients *near the current view*. The provider is abstracted by `SURVEY`
@@ -15,8 +15,8 @@
 // CORS-open, and its recent-all-sky + cone queries are fast (no burst throttle). ALeRCE-ZTF is
 // kept as an alternate. IDs are strings (LSST diaObjectId is int64 > 2^53).
 export type Broker = 'antares' | 'ztf';
-// Default = ZTF via ALeRCE (dense — "ingest all alerts"; ZTF is the LSST precursor the user
-// worked with). ANTARES (real Rubin/LSST + fuller per-object tags) is a runtime toggle.
+// Default = ZTF via ALeRCE (dense — "ingest all alerts"; ZTF is the LSST precursor stream).
+// ANTARES (real Rubin/LSST + fuller per-object tags) is a runtime toggle.
 let activeBroker: Broker = 'ztf';
 export const getBroker = (): Broker => activeBroker;
 export function setBroker(b: Broker): void {

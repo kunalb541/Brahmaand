@@ -1,7 +1,7 @@
 # Brahmaand — usage, acknowledgments & legal
 
-*Plain-language guidance, not legal advice. For anything commercial or at scale, confirm the
-current terms with each data provider (links below) or consult a lawyer. Last reviewed 2026-06-12.*
+*Plain-language guidance, not legal advice. Data-provider terms can change over time — confirm the
+current terms with each provider (links below) or consult a lawyer before relying on them.*
 
 Brahmaand is built **entirely on public astronomy data and services**. The application **code** is
 MIT-licensed (yours to use, modify, and sell). The **data and imagery** are owned by their
@@ -16,7 +16,7 @@ the in-app **About** panel + per-survey footers display the live credits.
 | **Personal / hobby / learning** | ✅ Yes | Just keep the attributions visible (the app already shows them). |
 | **Research / education / outreach** | ✅ Yes (this is the intended use) | Cite the data sources in any publication/product (acknowledgments below). |
 | **Public free app (no charge)** | ✅ Generally yes | Attribution; respect service rate limits & don't mirror data (hotlink it). |
-| **Commercial / paid app, at scale** | ⚠️ Case-by-case | Most catalogues/imagery are royalty-free **with attribution**, but: (1) one bundled asset (**Mellinger** Milky Way) is **non-commercial** — remove it; (2) Gaia/HYG-derived catalogues carry **CC BY-SA** (ShareAlike) — your redistributed catalogue must stay CC BY-SA; (3) heavy live traffic should move to your own mirror/CDN and you should email the providers. See "If this scales". |
+| **Commercial / paid app, at scale** | ⚠️ Case-by-case | Most catalogues/imagery are royalty-free **with attribution**, but: (1) one bundled asset (**Mellinger** Milky Way) is **non-commercial** — remove it; (2) Gaia/HYG-derived catalogues carry **CC BY-SA** (ShareAlike) — your redistributed catalogue must stay CC BY-SA; (3) heavy live traffic should move to your own data tier rather than relying on shared services. See "Building on Brahmaand" below. |
 
 There is **no login, no personal-data collection, no backend** in Brahmaand — so privacy/GDPR
 surface is minimal (the only personal datum is *optional* device location for the "point at the
@@ -70,26 +70,26 @@ Full per-asset licenses: [DATA-LICENSES.md](../DATA-LICENSES.md).
 > machine-generated and may be wrong. **Do not use for navigation, safety-critical, or operational
 > decisions.** All trademarks and data belong to their respective owners.
 
-## If this scales (commercial / high-traffic)
+## Building on Brahmaand
 
-Things to handle before charging money or sending real traffic:
+If you reuse the code or data — especially in a redistributed or larger-scale project — a few
+things are worth knowing:
 
-1. **Drop or license the non-commercial asset** — replace the bundled **Mellinger** texture (its
-   panorama is non-commercial) with an all-sky base you can use commercially, or get the author's
-   permission.
-2. **CC BY-SA on derived catalogues** — the Gaia+HYG star binary is a derived database under
-   CC BY-SA; publish it under CC BY-SA with credits, or regenerate from a permissive source.
-3. **Host your own data tier** — don't put a CDN in front of CDS (that's mirroring). Serve *your*
-   catalogue chunks from R2/S3; keep hotlinking HiPS but email **cds-question@unistra.fr** if you
-   expect heavy volume, and consider self-mirroring low HiPS orders (where the survey's `clonable`
-   flag allows). For alerts at scale, subscribe to the brokers' Kafka streams via a backend rather
-   than polling REST.
-4. **Attribution UI is mandatory and must stay** even in a paid product.
-5. **Check each provider's current terms** — they evolve. Start at:
+1. **Two assets carry extra conditions.** The bundled **Mellinger** Milky Way panorama is
+   **non-commercial**; remove it (or get the author's permission) before any commercial use. The
+   Gaia + HYG derived star catalogue is **CC BY-SA** — if you redistribute that derived database it
+   must stay CC BY-SA with credit, or be regenerated from a permissive source.
+2. **Attribution stays.** The in-app credits and this acknowledgment must remain in any product
+   built on Brahmaand.
+3. **Be a good neighbor to shared services.** Hotlink HiPS tiles and cutouts; don't mirror or put a
+   CDN in front of CDS. If you expect heavy live traffic, host your own catalogue tier and contact
+   the providers first.
+4. **Check each provider's current terms** — they evolve. Start at:
    [CDS acknowledgement](https://cds.unistra.fr/help/acknowledgement/) ·
    [CDS legals](https://cds.unistra.fr/legals/) ·
    [Gaia archive](https://gea.esac.esa.int/archive/) ·
    [Pan-STARRS / MAST](https://archive.stsci.edu/missions-and-data/pan-starrs) ·
    [NOIRLab/ANTARES](https://antares.noirlab.edu/).
-6. **Privacy** — if you later add accounts, push notifications, or analytics, you take on
-   personal-data obligations (privacy policy, GDPR/CCPA). The current app avoids all of that.
+5. **Privacy.** The app has no login, backend, or analytics; the only personal datum is *optional*
+   on-device location. Adding accounts, push notifications, or analytics would bring privacy-policy
+   and GDPR/CCPA obligations.

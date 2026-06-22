@@ -6,7 +6,7 @@ import * as THREE from 'three';
  * sphere (exact enough at the orders we stream tiles for — small cells). UVs map the
  * square tile image onto the quad.
  *
- * UV orientation is the one calibration knob (doc 03 §6.4 — 8 possibilities). It is
+ * UV orientation is the one calibration knob (one of 8 possible UV orientations). It is
  * settled empirically against the base equirect sphere; see ORIENT below.
  */
 

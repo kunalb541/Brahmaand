@@ -12,7 +12,7 @@ import { SKY_RADIUS } from './skySphere';
  *   • Galactic equator — the Milky Way plane (J2000 galactic→ICRS rotation).
  *
  * Horizon (alt/az) grid is intentionally NOT here: it depends on observer location + time and so
- * lives with the observability layer (a follow-up). Lines sit just inside the sphere to avoid
+ * lives with the observability layer. Lines sit just inside the sphere to avoid
  * z-fighting with the imagery and constellation lines.
  */
 

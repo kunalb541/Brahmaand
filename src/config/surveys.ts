@@ -3,7 +3,7 @@
  * vendored under public/textures/). High-resolution surveys have NO equirect texture — they
  * stream as HiPS tiles ON TOP of the DSS2 base when you zoom in, so any field composites
  * "DSS2 everywhere + the deepest survey that covers it". All HiPS params live-verified against
- * the CDS MocServer 2026-06-12 (see docs/ROADMAP-V2.md §1.1).
+ * the CDS MocServer 2026-06-12.
  */
 export interface SurveyEntry {
   id: string;
@@ -106,7 +106,7 @@ export const SURVEYS: SurveyEntry[] = [
     attribution: 'Mellinger Milky Way Panorama · A. Mellinger · CDS hips2fits',
     hemisphere: 'all',
     resolution: 'wide',
-    // galactic-frame HiPS — needs a frame rotation (doc 03 §6.5); equirect-only for now.
+    // galactic-frame HiPS — needs a frame rotation; equirect-only for now.
     hips: null,
   },
 ];

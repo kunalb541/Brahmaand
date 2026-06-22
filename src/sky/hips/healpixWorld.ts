@@ -39,7 +39,7 @@ function tilePixRad(order: number): number {
 }
 
 /**
- * Pick the HiPS order where one tile pixel ≈ one screen pixel (doc 03 §7).
+ * Pick the HiPS order where one tile pixel ≈ one screen pixel.
  * Clamped to [minOrder, maxOrder].
  */
 export function pickOrder(

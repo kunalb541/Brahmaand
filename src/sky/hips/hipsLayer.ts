@@ -38,8 +38,8 @@ const ndc = new THREE.Vector3();
 /**
  * Streams real HiPS tiles for the active (equatorial) survey and overlays them on the
  * base equirect sphere, so zooming in progressively sharpens to survey resolution.
- * v1 simplifications vs docs/03: per-tile meshes/textures (no texture-array pool), main-
- * thread decode (no worker), no MOC/mirror-failover. Those are PHASE-6/8 optimisations.
+ * Current implementation uses per-tile meshes/textures (no texture-array pool), main-
+ * thread decode (no worker), and no MOC/mirror-failover; these remain possible future optimisations.
  */
 export class HipsLayer {
   private group = new THREE.Group();

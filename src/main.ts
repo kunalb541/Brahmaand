@@ -879,7 +879,7 @@ function pickSkyDirection(dir: THREE.Vector3): void {
   void objectPanel.identifyAt(clickRd.raRad * RAD2DEG, clickRd.decRad * RAD2DEG);
 }
 
-// --- WebXR controller input (PHASE-6): rays, trigger→identify, thumbstick fly + snap-turn ---
+// --- WebXR controller input: rays, trigger→identify, thumbstick fly + snap-turn ---
 const xrInput = new XRInput(renderer, rig, camera, pickSkyDirection);
 
 // --- WebXR "Enter VR" (additive; shows "VR NOT SUPPORTED" on desktop without a headset).

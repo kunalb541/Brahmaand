@@ -1,126 +1,237 @@
-# Brahmaand — real-sky astronomy app (web · iOS · Android · VR)
+# ✦ Brahmaand
 
-A real-imagery sky atlas and real-distance 3D star-field flythrough, built on **TypeScript + Vite +
-Three.js + WebXR** and fed entirely by public astronomy services. It runs as a desktop/mobile web
-app, ships as **native iOS and Android apps via Capacitor**, and has an additive **WebXR "Enter VR"**
-mode. As functional as a planetarium, but modern — with a **full solar system + time machine** and
-**professional time-domain tools**. Two audiences sharing one modern shell: a **Pro** mode for
-astronomers and a simplified **Public** mode.
+**A real-sky astronomy app — explore the actual night sky in your browser, on your phone, and in VR.**
 
-Repo: **[github.com/kunalb541/Brahmaand](https://github.com/kunalb541/Brahmaand)** (public).
+[![Live demo](https://img.shields.io/badge/▶_live_demo-kunalb541.github.io%2FBrahmaand-2ea44f)](https://kunalb541.github.io/Brahmaand/)
+[![CI](https://github.com/kunalb541/Brahmaand/actions/workflows/deploy.yml/badge.svg)](https://github.com/kunalb541/Brahmaand/actions/workflows/deploy.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![Platforms](https://img.shields.io/badge/platforms-web_·_iOS_·_Android_·_WebXR-8a2be2)
+![Stack](https://img.shields.io/badge/TypeScript_·_Three.js_·_Vite-informational)
+![Backend](https://img.shields.io/badge/backend-%240%2Fmonth-success)
 
-> **Status: BUILT, RUNNABLE & VERIFIED — web + native iOS (Xcode `BUILD SUCCEEDED`) + native Android
-> (`app-debug.apk`).** Highlights, all live-verified:
-> - **Modern, zero-overlap UI.** App-frame layout (top bar + accordion dock + docked detail panel +
->   time bar + one-line status), responsive with no overlaps at phone / tablet / desktop; ☰ drawer
->   on phones. Pro ⇄ Public modes share the shell.
-> - **Telescope-resolution zoom, both hemispheres.** A survey ladder (DSS2 colour base →
->   Pan-STARRS / DES / DECaPS / unWISE / Rubin First Look / HST fields / JWST Carina / Mellinger)
->   streams live HiPS tiles from CDS, with exposure control and public-mode auto-survey.
-> - **747k real stars** — Gaia DR3 (638k) + HYG (109k brightest) vendored binaries with real
->   parallax distances; fly through them with WASD/QE or a touch joystick, photometric exposure.
-> - **Solar system, arcsecond-accurate.** Sun, Moon (correct phase drawn, bright limb toward the
->   Sun, topocentric parallax when location is set) and all 7 planets via the **astronomy-engine**
->   library (VSOP87/ELP, MIT, ~90 KB), validated to **arcseconds** against JPL Horizons. Positions
->   are J2000 ICRS, aberration-corrected and topocentric when an observer location is set;
->   magnitudes include Saturn's ring tilt; the Moon's illuminated fraction/phase is exact. Click any
->   body for distance, angular diameter, illumination/phase and observability. **Accuracy is proven
->   against real events:** unit tests reproduce the 2020-12-21 Jupiter–Saturn great conjunction and
->   the 2017-08-21 total solar eclipse (geocentric *and* topocentric from the totality path).
-> - **Time machine.** Time bar with −1d/+1d, rates ±1 s/s to ±1 yr/s, pause, click-to-type date,
->   ● Now; amber when warped; drives the solar system, observability and the horizon grid.
-> - **Observability** — altitude / azimuth / airmass + rise / transit / set + a "tonight" altitude
->   curve (sunset→sunrise, twilight shaded) for any object, from GPS or a saved manual location;
->   follows sim time (pure client math, unit-tested).
-> - **Grids & catalogues.** Equatorial grid + celestial equator, ecliptic + precession circles,
->   galactic equator, observer horizon (alt/az) grid; constellation stick figures + official IAU
->   boundaries; all **110 Messier objects** (positions from SIMBAD) with clickable, decluttering labels.
-> - **Tools.** FOV framing circle (5°/1°/30′/15′/5′, true angular size), 📐 two-click great-circle
->   measure (°/′/″, chainable), share deep links (`#ra&dec&fov&survey`), full hotkeys + ⌘K/Ctrl-K
->   command palette (see table below).
-> - **Live all-sky alert ingest (Pro)** with a scrollable **alert feed** + class filter, a
->   **broker toggle** ⚡ ZTF (ALeRCE, dense classified) ⇄ 🔭 LSST (ANTARES, real Rubin/LSST + ZTF),
->   an **ANTARES Streams explorer** (12 community tags, e.g. `nuclear_transient`, anomaly detectors),
->   the **difference-image triptych** (science / template / difference), light curves with error
->   bars + upper-limit arrows (g/r/i), ML class probabilities and real/bogus (drb) scores.
-> - **Period-finding (Pro).** A **Lomb-Scargle periodogram + phase-folding** runs on the best-sampled
->   photometric band of any transient — the standard period-finder for unevenly-sampled survey light
->   curves (variable stars, eclipsing binaries, RR Lyrae/Cepheids). Shows the periodogram and, when
->   significant, the phase-folded curve with "P = … · FAP … · significant/tentative". The frequency
->   grid is sized to the data (so long survey baselines aren't undersampled). Verified live on RR
->   Lyrae ZTF18abntqrg → P = 11.75 h (a textbook RRab period), FAP < 0.1%, corroborating "RRL 85%".
-> - **Light-curve CSV export** (detections + upper limits) as a no-backend download — all users.
-> - **Hertzsprung–Russell diagram.** A live colour–magnitude diagram built from the loaded Gaia DR3 +
->   HYG catalogues (absolute magnitude vs colour) — the main sequence, red-giant branch and
->   white-dwarf region from real data. Overlays toggle / `R` hotkey.
-> - **SIMBAD cross-match on alerts.** Opening a transient runs a cone search at its position and shows
->   the nearest catalogued source + type + separation — a coincident known variable ("likely the same
->   source", a re-detection), a nearby galaxy/AGN ("possible host", extragalactic), or nothing
->   ("uncatalogued"). Verified live: RR Lyrae ZTF18abntqrg → `RR* · 0.1″ · likely the same source`.
-> - **AAVSO VSX cross-match + period validation.** Also queries the AAVSO Variable Star Index (CORS-open)
->   for the catalogued variability type, **published period** and magnitude range, and **cross-checks our
->   measured Lomb-Scargle period against the literature** (✓ match / ½× or 2× alias / differs). Verified:
->   ZTF18abntqrg → `RRAB · P_cat = 11.75 h · ✓ your LS period matches` — four independent agreements
->   (broker ML, SIMBAD, VSX, our periodogram).
-> - **Flux photometry.** Peak flux in physical units (`peak 279 µJy`) and a `flux_uJy` column in the CSV,
->   via the AB zero-points (µJy / nJy — the Rubin/LSST alert unit) — flux is the space difference-imaging
->   actually measures.
-> - **Finder charts.** Object and alert cutouts carry N-up / E-left orientation marks and a field-sized
->   scale bar around the reticle — a telescope-ready finder. Plus per-target observability (rise / transit
->   / set, airmass, tonight's altitude curve) on every alert.
-> - **Rendered horizon.** Stellarium/Star-Walk-style ground: a translucent ground hemisphere that
->   dims the below-horizon sky, a bright horizon line and N/E/S/W cardinal markers, built from the
->   observer location + time; works in look-around and phone-gyro modes; on the "Horizon" toggle.
-> - **FITS quantitative mode (Pro)** — real per-pixel values + WCS RA/Dec readout + scientific
->   stretches (linear/log/√/asinh) and zscale, parsed accurately in-browser (no fake JPEG numbers).
-> - **Phone as a window on the sky.** Star-Walk-smooth gyro + compass + GPS register the view to
->   the *real* sky (altitude from gravity, azimuth from compass, RA/Dec from location + sidereal
->   time); falls back to relative magic-window without sensors.
-> - **Pro / Public dual mode**, deep-link sharing, WebXR VR, $0 backend.
->
-> Plans & guidance: [docs/ACTION-PLAN.md](docs/ACTION-PLAN.md) (design + pro-feature roadmap),
-> [docs/STELLARIUM-PARITY.md](docs/STELLARIUM-PARITY.md) (parity audit),
-> [docs/SCALING-COMMERCIAL.md](docs/SCALING-COMMERCIAL.md) (licensing + broker/CDS server-load),
-> [docs/DECISIONS.md](docs/DECISIONS.md), [docs/IOS.md](docs/IOS.md) / [docs/ANDROID.md](docs/ANDROID.md)
-> (build & install on a phone), [docs/USAGE-AND-LEGAL.md](docs/USAGE-AND-LEGAL.md) (attribution).
+Brahmaand (Sanskrit for *the cosmos*) is a real-imagery sky atlas **and** a real-distance 3D flight
+through the stars — fed entirely by public astronomy services, with **no backend and no accounts**.
+Pan and zoom across real telescope photography of the whole sky, fly through ~747,000 real stars at
+their true distances, watch an arcsecond-accurate solar system run on a time machine, and (in Pro
+mode) follow live transient alerts from the same brokers professional astronomers use. It runs as a
+web app, installs as **native iOS / Android apps**, works offline as a **PWA**, and has an additive
+**“Enter VR”** mode for headsets.
 
-## Quick start
+### ▶ [**Try it now → kunalb541.github.io/Brahmaand**](https://kunalb541.github.io/Brahmaand/)
+
+![The Milky Way's core with the Pro interface](docs/screenshots/hero-milky-way.jpg)
+
+---
+
+## Contents
+
+- [Screenshots](#screenshots)
+- [What it is](#what-it-is) · [Who it's for](#who-its-for-public-vs-pro)
+- [Feature highlights](#feature-highlights)
+- [Run it on your phone](#run-it-on-your-phone) · [Quick start (web)](#quick-start-web)
+- [Keyboard shortcuts](#keyboard-shortcuts--command-palette)
+- [Tech stack](#tech-stack) · [How it works](#how-it-works)
+- [Data sources & credits](#data-sources--credits) · [Contributing](#contributing) · [License](#license)
+
+---
+
+## Screenshots
+
+| | |
+|---|---|
+| ![Orion with constellations](docs/screenshots/sky-orion-constellations.jpg) | ![Live H–R diagram](docs/screenshots/hr-diagram.jpg) |
+| **Real sky + constellations.** Orion over DSS2 survey imagery with constellation figures, star labels and overlays. | **Hertzsprung–Russell diagram.** A live colour–magnitude diagram built from ~98k loaded Gaia DR3 + HYG stars. |
+| ![Zoom to the Andromeda Galaxy](docs/screenshots/deep-zoom-andromeda.jpg) | ![Pro live transient alerts](docs/screenshots/pro-live-alerts.jpg) |
+| **Telescope-resolution zoom.** Stream deeper survey tiles down to galaxies and nebulae — here, M31 in Pan-STARRS. | **Pro time-domain mode.** Live ZTF/LSST transient alerts as classified markers with a scrollable, filterable feed. |
+
+---
+
+## What it is
+
+Three pillars:
+
+1. **Real-imagery sky.** Actual survey photography — a DSS2 colour all-sky base with deeper surveys
+   (Pan-STARRS, DES, DECaPS, unWISE, Rubin First Look, HST and JWST fields, Mellinger Milky Way)
+   streamed as **HiPS** tiles (the IVOA Hierarchical Progressive Survey standard) from CDS. Pan,
+   zoom to telescope resolution, switch surveys, adjust exposure — everything you see is a real
+   photograph of the sky, correctly aligned so every overlay sits on the right stars.
+2. **Real-distance 3D flythrough.** ~747,000 real stars — 638k from **Gaia DR3** plus the 109k
+   brightest from **HYG** — placed at their true parallax distances and rendered as a custom
+   Three.js point field. Leave Earth and fly through the actual solar neighbourhood.
+3. **Live time-domain layer (Pro).** All-sky transient and variable-star alerts from community
+   brokers — **ALeRCE/ZTF** (dense, classified) and **ANTARES** (the real Rubin/LSST + ZTF stream) —
+   with machine-learning classifications, light curves, image-subtraction stamps, period-finding and
+   catalogue cross-matches.
+
+### Who it's for: Public vs Pro
+
+One codebase, two experiences — switch by toggle or `?mode=` URL, remembered per device:
+
+- **Public mode** — a clean, friendly sky: search, fly, “what’s up tonight”, share. Research chrome
+  hidden; the app auto-picks the best survey as you zoom.
+- **Pro mode** (default) — catalogues, classifiers, RA/Dec readout, exposure, the full survey ladder
+  and the complete time-domain toolset.
+
+---
+
+## Feature highlights
+
+<details open>
+<summary><b>Sky &amp; imagery</b></summary>
+
+- **Real-sky survey atlas** — pan/zoom the whole night sky rendered from real telescope photography.
+- **Streaming telescope-resolution zoom (HiPS)** — deeper image tiles stream in and fade up as you zoom.
+- **Multi-survey ladder** — DSS2 colour base + Pan-STARRS, DES, DECaPS, unWISE (IR), Rubin First Look, HST and JWST fields.
+- **Survey switcher** *(Pro)* — a wavelength-coloured chip strip; each flies you to a famous target (Eagle Nebula, JWST Cosmic Cliffs…).
+- **Auto-survey selection** *(Public)* — the app silently picks the deepest survey for wherever you look.
+- **Adaptive level-of-detail** — loads only the tiles you can see at the right resolution for your zoom.
+- **Exposure / brightness control** — a photographic slider brightens imagery and 3D stars together.
+</details>
+
+<details>
+<summary><b>Stars &amp; 3D flythrough</b></summary>
+
+- **Real-distance 3D star field** — ~747k stars (Gaia DR3 + HYG) at true parallax distances, brightness from real photometry.
+- **Fly through the stars** — WASD/QE or an on-screen joystick, with boost and distance-scaled speed.
+- **Return to Earth** — snap the camera back home anytime.
+- **Bright-star labels** — Sirius, Vega, Polaris and other naked-eye stars labelled on the sky.
+- **Hertzsprung–Russell diagram** — a live colour–magnitude diagram from the loaded stars; the main sequence, red-giant branch and white-dwarf region emerge from real data.
+</details>
+
+<details>
+<summary><b>Solar system &amp; time machine</b></summary>
+
+- **Solar system with correct Moon phase** — Sun, phase-lit Moon and 7 planets at real positions and true angular sizes; Saturn’s ring drawn, the Moon’s bright limb correctly turned toward the Sun.
+- **Arcsecond-accurate ephemeris** — positions, phases, brightness, distance and apparent size via `astronomy-engine` (VSOP87/ELP), validated to arcseconds against JPL Horizons.
+- **Time machine** — scrub to any date and animate from real-time up to a year per second, step by days, or jump back to *now*; the clock turns amber when time-warped.
+</details>
+
+<details>
+<summary><b>Constellations, grids &amp; reference lines</b></summary>
+
+- **Constellation figures &amp; labels** — classic stick figures over the real stars, with bright-star names.
+- **IAU constellation boundaries** — the official borders dividing the sky into the 88 constellations.
+- **Equatorial (RA/Dec) grid** — ICRS/J2000 grid with the celestial equator, drawn as accurate great/small circles.
+- **Ecliptic &amp; precession circles** — the Sun’s yearly path plus the 25,800-year precession circles.
+- **Galactic plane** — the mid-plane of the Milky Way.
+- **Local horizon &amp; alt/az grid** — a translucent ground hemisphere, horizon line, N/E/S/W markers and an alt-az grid for your location and time.
+</details>
+
+<details>
+<summary><b>Catalogues &amp; deep-sky objects</b></summary>
+
+- **Messier catalogue (M1–M110)** — all 110 galaxies, nebulae and clusters from SIMBAD, with clickable fly-to labels that declutter at wide fields.
+- **VizieR multiwavelength overlays** *(Pro)* — overlay real source catalogues (Gaia optical, 2MASS near-IR, AllWISE mid-IR, Chandra X-ray) on the same field.
+- **Deep-sky image cutouts** — real survey imagery for any field, as a picture or as scientific FITS data.
+</details>
+
+<details>
+<summary><b>Observability &amp; planning</b></summary>
+
+- **Set your location** — device GPS or manual lat/long; every altitude and rise/set is computed for where you actually are.
+- **Altitude, azimuth &amp; air mass** — how high and where any target sits right now.
+- **Rise, transit &amp; set times** — when a target rises, peaks and sets tonight (flags circumpolar / never-rises).
+- **Tonight’s altitude curve** — altitude-vs-time with sunset/sunrise, twilight shading and a *now* marker.
+- **Sidereal time &amp; frame correction** *(Pro)* — reconciles J2000 catalogue coordinates with the of-date sky so pointing stays accurate.
+</details>
+
+<details>
+<summary><b>Identify, search &amp; inspect</b></summary>
+
+- **Click or tap to identify anything** — solar-system body, then live transient, otherwise the nearest SIMBAD source.
+- **Search by name or coordinates** — “M31”, “Vega”, or a raw RA/Dec pair (via Sesame + SIMBAD).
+- **Rich object info panel** — type, coordinates, magnitudes, spectral class, distance, proper motion, radial velocity, with links to SIMBAD and ESASky.
+- **Finder-chart cutouts** — a DSS2 thumbnail with centring reticle, N/E marks and a field-scaled bar, like a telescope finder.
+- **Angular-separation tool** — click two points for the great-circle angle in °/′/″, with a drawn, chainable arc.
+- **Live RA/Dec readout** — sky coordinates under the cursor or view centre.
+- **FOV framing circle** *(Pro)* — a true-angular-size circle cycling common eyepiece/detector fields.
+</details>
+
+<details>
+<summary><b>Pro time-domain tools</b></summary>
+
+- **Live all-sky transient alerts** — colour-coded markers + a scrollable feed, polling the broker near your view.
+- **Two brokers** — switch ZTF via **ALeRCE** ⇄ Rubin/LSST + ZTF via **ANTARES**, with consistent labels and links.
+- **ANTARES community streams** — browse alerts by tag (nuclear transients/TDEs, anomalies, solar-system objects, dwarf-nova outbursts…).
+- **ML classifications &amp; filter** — supernova / AGN / RR Lyrae verdicts with ranked probabilities; tap a class to hide/show.
+- **Light curves with non-detections** — per-band magnitude-vs-time with error bars and upper-limit arrows.
+- **Image-subtraction triptych** — the science / template / difference stamps used to vet a real change.
+- **Real/bogus scores** — the broker’s deep-learning real-vs-bogus verdict.
+- **Lomb–Scargle period search &amp; phase folding** — an off-thread periodogram on the best-sampled band, with peak period, false-alarm probability and a phase-folded curve.
+- **AAVSO VSX cross-match** — compares your measured period against the published one, flagging ½×/2× aliases.
+- **SIMBAD cross-match triage** — the nearest catalogued source: host galaxy, re-detected known variable, or uncatalogued discovery.
+- **Flux photometry &amp; CSV export** — peak flux in microjanskys; export detections + upper limits as CSV, fully client-side.
+- **FITS quantitative mode** — true per-pixel values, a WCS RA/Dec cursor readout and zscale + linear/log/√/asinh stretches.
+- **Offline snapshot fallback** — a bundled real all-sky alert snapshot when the live broker is slow.
+</details>
+
+<details>
+<summary><b>Devices, VR &amp; AR</b></summary>
+
+- **Phone as a window on the sky** — gyroscope tracking; with GPS + compass it locks to the real sky in the direction you point.
+- **Drag-to-align calibration** — nudge the sky to match what you see; the correction is saved (counters unreliable phone compasses).
+- **WebXR immersive VR** — on a headset, point a controller ray to identify, fly with the thumbstick and snap-turn.
+- **Installable offline PWA** — a service worker caches the app shell, catalogues, textures and a capped set of tiles for offline use.
+</details>
+
+<details>
+<summary><b>Interface &amp; experience</b></summary>
+
+- **Pro / Public dual mode** — selectable by toggle or URL and remembered.
+- **Responsive app shell** — a fixed, non-overlapping frame that becomes a drawer + bottom sheet on phones.
+- **Command palette** — `⌘K` / `Ctrl-K` runs any toggle or tool and falls through to object search.
+- **Keyboard shortcuts** — Stellarium-style single keys for every overlay, tool and time control.
+- **Shareable deep-link views** — a Share button copies a URL encoding the exact view (RA, Dec, FOV, survey).
+- **Help &amp; About panels** — controls, gyro modes, install steps, and full data-source credits.
+- **Performance HUD** — optional FPS / draw-call readout for diagnostics.
+</details>
+
+---
+
+## Run it on your phone
+
+The fastest path is the **PWA**: open [the live demo](https://kunalb541.github.io/Brahmaand/) on your
+phone and add it to your home screen — it then works offline and full-screen.
+
+For the **native apps** (built with [Capacitor](https://capacitorjs.com/)) you build and install from
+source — no store account needed for personal use:
+
+- **iOS** — `npm run ios:sync && npm run ios:open`, then ▶ to your iPhone from Xcode (free Apple-ID
+  signing works). Full walkthrough: **[docs/IOS.md](docs/IOS.md)**.
+- **Android** — `cd android && ./gradlew assembleDebug` produces a sideloadable
+  `app-debug.apk` (~18 MB) you can AirDrop/email to a friend. Full walkthrough:
+  **[docs/ANDROID.md](docs/ANDROID.md)**.
+
+---
+
+## Quick start (web)
 
 ```bash
 npm install
-npm run dev          # → http://localhost:5173  (look around the real sky)
-npm run build        # typecheck + production bundle into dist/
-npm test             # 42 unit tests (frames, ephemeris, observability, FITS, periodogram, device-sky)
-
-# Native apps (Capacitor) — see docs/IOS.md and docs/ANDROID.md
-npm run ios:sync && npm run ios:open       # build web → open in Xcode → ▶ to your iPhone
-npm run android:sync && npm run android:open  # build web → open in Android Studio → ▶ / build APK
-
-# Refresh the bundled data snapshots (all real services; re-runnable)
-node tools/build-transients-ztf.mjs        # dense ZTF/ALeRCE  → public/transients/tonight.json
-node tools/build-transients.mjs            # ANTARES Rubin/LSST → public/transients/tonight-antares.json
-node tools/build-messier.mjs               # Messier M1–M110 from SIMBAD TAP → public/data/messier.json
+npm run dev        # → http://localhost:5173
+npm run build      # typecheck + production bundle into dist/
+npm test           # 42 unit tests (frames, ephemeris, observability, FITS, periodogram, device-sky)
 ```
 
-**Send the Android app to a friend:** build the debug APK (`cd android && ./gradlew assembleDebug`
-→ `android/app/build/outputs/apk/debug/app-debug.apk`, ~18 MB) and share that file (AirDrop, email,
-Drive, etc.). They enable *Settings → Apps → Special access → Install unknown apps* for the app they
-received it through, then tap the APK to install. No Play Store or developer account needed. See
-[docs/ANDROID.md](docs/ANDROID.md) for signed-release and Play Store options.
-
 Real assets are already vendored under `public/` (DSS2 + Mellinger all-sky JPEGs, constellation
-lines + IAU boundaries, star binaries, Messier catalogue, transient snapshots) and a service worker
-provides an offline shell. WebXR needs a secure context — `localhost` counts; for a headset on your
-LAN, run `npm run dev -- --host` behind an HTTPS tunnel (see
-[docs/research/deploy-assets.md](docs/research/deploy-assets.md) §5). No headset? The VR button
-shows "VR NOT SUPPORTED" and everything works as a normal 3D app; test VR via the Immersive Web
-Emulator.
+lines + IAU boundaries, the star binaries, the Messier catalogue and transient snapshots), and a
+service worker provides an offline shell — so a fresh clone runs with no extra downloads.
 
-The star binaries are vendored (`public/catalogs/hyg.bin` 2 MB, `public/catalogs/gaia.bin` 12 MB).
-To regenerate: `curl -L <HYG v4.1 csv> -o data-src/hyg.csv && node tools/build-stars.mjs` for HYG,
-and `node tools/build-gaia.mjs` for the Gaia DR3 extract (live ESA Gaia TAP, no account needed).
+**Regenerate the bundled data** (all from real services, re-runnable):
 
-### Keyboard shortcuts
+```bash
+node tools/build-stars.mjs        # HYG v4.1 (data-src/hyg.csv) → public/catalogs/hyg.bin
+node tools/build-gaia.mjs         # ESA Gaia DR3 TAP            → public/catalogs/gaia.bin
+node tools/build-messier.mjs      # SIMBAD TAP                  → public/data/messier.json
+node tools/build-transients-ztf.mjs   # ALeRCE/ZTF             → public/transients/tonight.json
+node tools/build-transients.mjs       # ANTARES Rubin/LSST     → public/transients/tonight-antares.json
+```
+
+> **WebXR** needs a secure context — `localhost` counts. No headset? The VR button shows
+> “VR NOT SUPPORTED” and everything works as a normal 3D app; develop against the
+> [Immersive Web Emulator](https://github.com/meta-quest/immersive-web-emulator).
+
+### Keyboard shortcuts & command palette
 
 | Key | Action | Key | Action |
 |---|---|---|---|
@@ -128,163 +239,87 @@ and `node tools/build-gaia.mjs` for the Gaia DR3 extract (live ESA Gaia TAP, no 
 | `L` | star labels | `M` | Messier objects |
 | `R` | H–R diagram | `,` | ecliptic |
 | `G` | equatorial grid | `H` | horizon grid |
-| `P` | planets | | |
-| `T` | live alerts | `F` | FOV circle |
-| `[` `]` | time ±1 day | `N` | back to now |
-| `/` | search | `?` | help |
-
-`⌘K` / `Ctrl-K` opens the command palette (all commands; falls through to sky search).
-
-### Stopping local dev processes
-
-The dev server and the native toolchains spawn background processes. To stop everything cleanly:
-
-```bash
-# Vite dev server (Ctrl-C in its terminal, or by port):
-lsof -ti :5173 | xargs kill        # kills whatever holds the dev-server port
-
-# Android Gradle daemons (they linger after a build):
-cd android && ./gradlew --stop
-
-# Any stray bundler/build workers:
-pkill -f vite ; pkill -f esbuild   # optional, only if something is stuck
-
-# Xcode/simulator (if a simulator build was launched):
-xcrun simctl shutdown all          # stop running simulators
-```
-
-Nothing in this project runs as a service or daemon by default — closing the terminals that ran
-`npm run dev` / Gradle / Xcode is enough; the commands above are the belt-and-suspenders version.
+| `P` | planets | `F` | FOV circle |
+| `T` | live alerts (Pro) | `/` | search |
+| `[` `]` | time ∓1 day | `N` | back to now |
+| `?` | help | `⌘K` / `Ctrl-K` | command palette |
 
 ---
 
-## What the app is
+## Tech stack
 
-Three pillars (original vision in [docs/00-vision.md](docs/00-vision.md)):
+| Component | Choice |
+|---|---|
+| Language / build | **TypeScript + Vite** (`typescript@6`, `vite@8`) |
+| 3D engine | **Three.js** `WebGLRenderer` (`three@0.184`, pinned) |
+| Ephemeris | `astronomy-engine` (MIT — VSOP87/ELP) |
+| HEALPix math | `healpix-ts` (MIT) |
+| Native shell | **Capacitor** (iOS via SPM, Android via Gradle) |
+| Tests | **Vitest** (42 unit tests) |
+| Data pipeline | Node scripts in `tools/` (Gaia TAP, SIMBAD TAP, ALeRCE, ANTARES, HYG) |
+| Hosting / CI | Static GitHub Pages; GitHub Actions runs typecheck + test + build and deploys on every push to `main` |
 
-1. **Real-imagery sky.** Actual survey photography (DSS2 colour base, Pan-STARRS, DES, DECaPS,
-   unWISE, Rubin First Look, HST fields, JWST Carina, Mellinger Milky Way) streamed as **HiPS
-   tiles** (IVOA Hierarchical Progressive Survey standard) from CDS servers and textured onto an
-   inside-out celestial sphere. Pan, zoom to telescope resolution, switch surveys, adjust exposure;
-   everything you see is a real photograph of the sky.
-2. **Real-distance 3D flythrough.** 638k **Gaia DR3** stars + the 109k brightest from HYG, vendored
-   as compact static binaries with real parallax distances, rendered as a custom Three.js point
-   field with photometric exposure. Leave Earth and fly through the actual solar neighborhood
-   (WASD/QE or touch joystick) — parallax is real.
-3. **Live transient layer ("what changed tonight", Pro).** All-sky alerts surfaced via community
-   broker REST APIs with a runtime toggle: **ALeRCE/ZTF** (dense, classified — the LSST-precursor
-   stream) and **ANTARES** (the real Rubin/LSST + ZTF stream), plus an **ANTARES Streams** dropdown
-   exploring 12 community tags (e.g. `nuclear_transient`, anomaly detectors, `sso_confirmed`).
-   Markers are coloured by ML class; click for classification + probabilities, a light curve with
-   error bars + upper-limit arrows, real/bogus score, the science/template/difference cutout
-   triptych and a broker link. Live cone polling near the view; bundled snapshots as fallback.
+## How it works
 
-Supporting features:
-
-- **Solar system + time machine** — Sun, Moon and planets at arcsecond accuracy via astronomy-engine
-  (VSOP87/ELP, validated vs JPL Horizons), driven by a scrubable simulation clock (±1 s/s to ±1 yr/s);
-  see status callout above.
-- **Object info on click/tap** — solar-system body, else transient marker, else SIMBAD cone search;
-  name search via Sesame; catalog overlays Gaia DR3 / 2MASS / AllWISE / Chandra via VizieR;
-  hips2fits postage-stamp cutouts with a centre reticle on every popup — all CORS-open, called
-  directly from the browser, no backend.
-- **Good-neighbour networking** — client rate limiters (CDS ≈4/s, brokers 3/s), cone caching,
-  polite retry with exponential backoff honouring `Retry-After`, live polling paused in hidden
-  tabs; HiPS tiles hotlinked and browser-cached, never mirrored.
-- **WebXR `immersive-vr` mode** (Quest-class headsets) as an additive layer over the same scene;
-  mobile gets touch + gyro/compass/GPS sky-lock AR (or relative magic-window without sensors).
-- **$0/month infrastructure** — static hosting, vendored data under `public/`, hotlinked CDS HiPS
-  tiles, no backend, no accounts.
+Everything is computed in the browser and every datum comes from a public astronomy service — there
+is **no server to run, no database, and no accounts**. Catalogues and base imagery are vendored as
+static files; HiPS tiles are hotlinked (and browser-cached) directly from CDS; alert brokers and
+catalogue services are queried directly with client-side rate limiting and polite, `Retry-After`-aware
+backoff so the app is a good citizen of shared scientific infrastructure.
 
 ```mermaid
 flowchart LR
   subgraph services["Public data services"]
-    CDS["CDS alasky / alaskybis<br/>HiPS tiles, hips2fits,<br/>SIMBAD, VizieR, Sesame"]
-    ESA["ESA Gaia TAP + SIMBAD TAP<br/>(build-time scripts)"]
-    BROKERS["Alert brokers<br/>ALeRCE (ZTF) + ANTARES (Rubin/LSST)"]
+    CDS["CDS alasky<br/>HiPS tiles · hips2fits<br/>SIMBAD · VizieR · Sesame"]
+    ESA["ESA Gaia TAP + SIMBAD TAP<br/>(build-time)"]
+    BROKERS["Alert brokers<br/>ALeRCE (ZTF) · ANTARES (Rubin/LSST)"]
   end
-  subgraph build["Build-time scripts (tools/*.mjs)"]
-    PIPE["build-gaia / build-stars /<br/>build-messier / build-transients*"]
+  subgraph build["Build scripts (tools/*.mjs)"]
+    PIPE["build-gaia · build-stars<br/>build-messier · build-transients*"]
   end
-  subgraph browser["Browser / native shell (Capacitor)"]
-    APP["Three.js renderer<br/>HiPS sphere + star field + solar system<br/>+ grids + transient markers"]
-    XR["WebXR 'Enter VR'<br/>(additive mode)"]
+  subgraph app["Browser / native shell (Capacitor)"]
+    CORE["Three.js renderer<br/>HiPS sphere + star field + solar system<br/>+ grids + transient markers"]
+    XR["WebXR ‘Enter VR’"]
   end
-  ESA --> PIPE -->|"vendored under public/"| APP
-  CDS --> APP
-  BROKERS -->|"direct CORS, rate-limited,<br/>snapshot fallback"| APP
-  APP --> XR
+  ESA --> PIPE -->|"vendored under public/"| CORE
+  CDS --> CORE
+  BROKERS -->|"direct CORS, rate-limited,<br/>snapshot fallback"| CORE
+  CORE --> XR
 ```
 
-## Tech stack (pinned — see package.json)
+---
 
-| Component | Choice | Version |
-|---|---|---|
-| Language / build | TypeScript + Vite (`vanilla-ts`) | `typescript@6.0.3`, `vite@8.0.16` |
-| 3D engine | Three.js, **WebGLRenderer** | `three@0.184.0` + `@types/three@0.184.1` (pinned exactly, no `^`) |
-| HEALPix math | `healpix-ts` (MIT, Development Seed) | `1.1.0` |
-| Ephemeris | `astronomy-engine` (MIT, Don Cross; VSOP87/ELP) | `^2.1.19` |
-| Native shell | Capacitor (iOS via SPM — no CocoaPods; Android via Gradle) | `@capacitor/*@^8.4` |
-| Tests | Vitest | `3.2.4` |
-| Data pipeline | Node scripts in `tools/` (Gaia TAP, SIMBAD TAP, ALeRCE, ANTARES, HYG) | — |
-| Hosting / CI | Static hosting, no backend; GitHub Actions (typecheck + test + build on push; Pages deploy on manual dispatch) | — |
+## Data sources & credits
 
-## Documentation map
+Brahmaand is built on the generosity of public astronomy infrastructure. Imagery and data are © their
+providers and carry their own licenses — **see [DATA-LICENSES.md](DATA-LICENSES.md) for the full,
+authoritative attribution**, and [docs/USAGE-AND-LEGAL.md](docs/USAGE-AND-LEGAL.md) for per-provider
+usage rules. In short, with gratitude:
 
-### Current docs
+- **CDS, Strasbourg** — HiPS tiles, hips2fits, SIMBAD, VizieR, Sesame, MocServer.
+- **ESA / Gaia / DPAC** — Gaia DR3 (the star distances); **astronexus** — the HYG database.
+- **STScI / DSS2**, **Pan-STARRS**, **DES**, **DECaPS / NOIRLab**, **unWISE**, **Rubin Observatory**,
+  **HST**, **JWST**, and the **Mellinger** Milky Way panorama — survey imagery.
+- **ALeRCE** and **ANTARES (NOIRLab)** brokers — ZTF and Rubin/LSST alert streams; **AAVSO VSX** —
+  the variable-star index.
 
-| Doc | Contents |
-|---|---|
-| [docs/ACTION-PLAN.md](docs/ACTION-PLAN.md) | Design + pro-feature roadmap: what's done, what's next, in priority order |
-| [docs/STELLARIUM-PARITY.md](docs/STELLARIUM-PARITY.md) | Feature-by-feature parity audit against Stellarium |
-| [docs/SCALING-COMMERCIAL.md](docs/SCALING-COMMERCIAL.md) | What it takes to sell or scale: licensing blockers, broker/CDS server-load etiquette |
-| [docs/USAGE-AND-LEGAL.md](docs/USAGE-AND-LEGAL.md) | Attribution requirements and usage rules for every data provider |
-| [docs/IOS.md](docs/IOS.md) | Build & install the native iOS app (Xcode, SPM, free Apple-ID signing) |
-| [docs/ANDROID.md](docs/ANDROID.md) | Build & install the native Android app (debug APK sideload, signed release) |
-| [docs/DECISIONS.md](docs/DECISIONS.md) | Every deviation from the original blueprint, with reasons |
-| [DATA-LICENSES.md](DATA-LICENSES.md) | Licenses and attribution for all bundled data and imagery |
+## Contributing
 
-### Original build blueprint (historical)
+Contributions and bug reports are welcome — open an [issue](https://github.com/kunalb541/Brahmaand/issues)
+or a PR. Good places to start:
 
-The repo was built from a detailed up-front blueprint, kept for reference: the numbered design docs
-([docs/00-vision.md](docs/00-vision.md) … [docs/08-testing.md](docs/08-testing.md)), the phase plans
-in [`plan/`](plan/) (with [plan/AGENT_INSTRUCTIONS.md](plan/AGENT_INSTRUCTIONS.md) as the working
-contract), the live-verified research dumps in [`docs/research/`](docs/research/) (HiPS format,
-HEALPix math, Gaia pipeline, Rubin/LSST access, TAP/CORS probes, Quest performance, deploy, license
-gates for existing projects), and [ROADMAP.md](ROADMAP.md). Each shipped phase is a pragmatic subset
-of its spec — [docs/DECISIONS.md](docs/DECISIONS.md) records the exact deviations.
-[docs/PRO-ROADMAP.md](docs/PRO-ROADMAP.md) is superseded by [docs/ACTION-PLAN.md](docs/ACTION-PLAN.md).
+- **Data pipelines** (`tools/*.mjs`) — each script regenerates a bundled dataset from a real service.
+- **Tests** (`*.test.ts`, run with `npm test`) — coordinate frames, ephemeris anchors (the 2020 great
+  conjunction, the 2017 total eclipse), observability, FITS, periodogram and device-sky.
+- **Subsystems** live under `src/` (`sky/`, `stars/`, `data/`, `ui/`, `core/`). `npm run typecheck`
+  must stay clean.
 
-## Status & key constraints
-
-- **Phase: built, runnable & verified** on web + native iOS (Xcode `BUILD SUCCEEDED`, SPM, no
-  CocoaPods) + native Android (`app-debug.apk` ~18 MB, `BUILD SUCCESSFUL`).
-- **42 unit tests passing** — coordinate frames (4), FITS parsing (4), observability (7, incl. the
-  J2000⇄of-date frame round-trip), ephemeris (8, including the 2020 great-conjunction and 2017
-  total-eclipse anchors), Lomb-Scargle periodogram (5), photometry/AB-flux (4), device-sky/gyro (10).
-  Typecheck clean, production build green.
-- **CI:** GitHub Actions runs typecheck + test + build on every push (green); Pages deploy only on
-  manual dispatch (Pages not enabled yet).
-- **Remaining (optional polish):** NGC/IC deep catalogue, eclipse/conjunction finder UI, exoplanet
-  overlay, tabbed detail panel, i18n, planet moons, Gaia deep tiers, constellation art/cultures.
-  Backend-gated (out of scope for the $0 design): ZTF/LSST forced photometry, TNS names,
-  watchlists, Kafka streams.
-- **Commercial blockers** (see [docs/SCALING-COMMERCIAL.md](docs/SCALING-COMMERCIAL.md)): the
-  Mellinger panorama is non-commercial and must be replaced before selling; the star binaries are
-  Gaia DR3 (CC BY-SA 3.0 IGO) + HYG v4.1 (CC BY-SA 4.0); an attribution UI is mandatory.
-- **No VR headset on the team.** Everything runs as a plain desktop/mobile web app; VR is developed
-  against the Immersive Web Emulator. The AR compass calibration knobs (`AZ_SIGN`/`AZ_OFFSET_DEG`)
-  await an on-device check.
-- **No accounts, no stateful backend** — all services are called directly from the browser with
-  client-side rate limiting and polite backoff.
-- **Attribution is mandatory**: DSS2 (STScI acknowledgment), ESA/Gaia/DPAC (CC BY-SA 3.0 IGO),
-  Rubin First Look (ODbL-1.0, RubinObs/NOIRLab/SLAC/NSF/DOE/AURA), CDS services, broker credits.
-  The UI must display `obs_copyright` strings from HiPS `properties` files.
+The original up-front design blueprint, phase plans, research notes and design decisions are kept in
+[`docs/internal/`](docs/internal/) for transparency — they’re build history, not user docs.
 
 ## License
 
-Source code: **MIT** ([LICENSE](LICENSE)). Bundled data and imagery carry their own provider
-licenses (Gaia DR3 + HYG derived star binaries CC BY-SA; DSS2/STScI; Mellinger panorama
-non-commercial; constellation lines + boundaries BSD-3) — see
-**[DATA-LICENSES.md](DATA-LICENSES.md)** for full attribution and the implications for
-public/commercial use.
+Source code is **[MIT](LICENSE)**. Bundled astronomical **data and imagery are not** — they carry
+their providers’ terms (Gaia DR3 + HYG star binaries are CC BY-SA; the Mellinger panorama is
+non-commercial; constellation data is BSD-3). See **[DATA-LICENSES.md](DATA-LICENSES.md)** for full
+attribution and the implications for public and commercial use.

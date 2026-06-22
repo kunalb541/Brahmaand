@@ -1,13 +1,13 @@
 import * as THREE from 'three';
 
 /**
- * WebXR controller input (PHASE-6). All of this is inert until an immersive session starts,
+ * WebXR controller input. All of this is inert until an immersive session starts,
  * so desktop is unaffected. Provides:
  *   - a pointing ray on each controller; trigger (selectstart) → onSelect(worldDir)
  *     (reuses the same identify path as a desktop click)
  *   - left thumbstick → fly through space (moves the rig); right thumbstick X → snap-turn
  *   - foveation + target-frame-rate setup on sessionstart
- * Verified in the Immersive Web Emulator (the team has no headset); see docs/DECISIONS.md.
+ * Developed against the Immersive Web Emulator.
  */
 
 const q = new THREE.Quaternion();
