@@ -47,6 +47,7 @@ export class HipsLayer {
   private inFlight = 0;
   private frame = 0;
   private cfg: HipsConfig | null = null;
+  private exposure = 1; // brightness multiplier on tile materials (driven by the exposure slider)
   /** current LOD order, exposed for the HUD */
   order = 0;
   tileCount = 0;
@@ -77,6 +78,15 @@ export class HipsLayer {
     this.group.position.copy(v);
   }
 
+  /** Brightness multiplier for the survey tiles (the exposure slider). HiPS imagery is faint —
+   *  without this, deep-survey tiles render near-black (only the boosted base sphere was lit). */
+  setExposure(mult: number): void {
+    this.exposure = mult;
+    for (const t of this.tiles.values()) {
+      if (t.mesh) (t.mesh.material as THREE.MeshBasicMaterial).color.setScalar(mult);
+    }
+  }
+
   /** Show/hide the whole tile layer (suspended once you fly away from Earth). */
   setVisible(on: boolean): void {
     this.group.visible = on;
@@ -101,7 +111,11 @@ export class HipsLayer {
     this.frame++;
 
     const fovYRad = (camera.fov * Math.PI) / 180;
-    const order = pickOrder(fovYRad, window.innerHeight, 3, this.cfg.maxOrder);
+    // pickOrder must use the ACTUAL rendered pixel height. The renderer draws at
+    // setPixelRatio(min(dpr,2)), so on a retina screen CSS innerHeight is half the real
+    // resolution and tiles come out ~one order too coarse — bilinear-magnified into mush.
+    const renderPx = window.innerHeight * Math.min(window.devicePixelRatio || 1, 2);
+    const order = pickOrder(fovYRad, renderPx, 3, this.cfg.maxOrder);
     this.order = order;
 
     if (order < MIN_STREAM_ORDER) {
@@ -213,6 +227,7 @@ export class HipsLayer {
     tex.generateMipmaps = false;
     tex.minFilter = THREE.LinearFilter;
     tex.magFilter = THREE.LinearFilter;
+    tex.anisotropy = 8; // match the base sphere; sharpens tiles toward the sphere edges
     tex.flipY = false;
     tex.needsUpdate = true;
 
@@ -220,6 +235,7 @@ export class HipsLayer {
     const geo = buildTileGeometry(corners, SUBDIV, RADIUS);
     const mat = new THREE.MeshBasicMaterial({
       map: tex,
+      color: new THREE.Color().setScalar(this.exposure), // brightness (exposure slider)
       side: THREE.DoubleSide, // winding-agnostic; tiles are viewed from the sphere centre
       depthTest: false,
       depthWrite: false,

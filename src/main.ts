@@ -120,6 +120,9 @@ const jumpRd = { raRad: 0, decRad: 0 };
 // boost — the vendored all-sky JPEG is dark, which is why the Milky Way band was invisible).
 let skyStops = 0;
 function applySkyExposure(): void {
+  // HiPS survey tiles are faint; without a boost the deep-survey imagery renders near-black
+  // (only the base sphere was lit). +2.5 stops default so faint fields are visible; slider-adjustable.
+  hips.setExposure(Math.pow(2, skyStops + 2.5));
   if (!sky) return;
   const boost = currentSurvey.id === 'dss2' ? 1.7 : 1;
   (sky.material as THREE.MeshBasicMaterial).color.setScalar(boost * Math.pow(2, skyStops));
