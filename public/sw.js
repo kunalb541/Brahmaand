@@ -1,7 +1,7 @@
 // Brahmaand service worker: offline app shell + cached catalogs/textures, plus a
 // capped cache for CORS-fetched CDS HiPS tiles. Dynamic data (SIMBAD/ALeRCE/Sesame) is never
 // cached. Bump CACHE_VERSION to invalidate. Registered only in production (see main.ts).
-const CACHE_VERSION = 'brahmaand-v2';
+const CACHE_VERSION = 'brahmaand-v3';
 const TILE_CACHE = 'brahmaand-tiles-v1';
 const TILE_MAX = 1500;
 
@@ -39,6 +39,10 @@ self.addEventListener('fetch', (event) => {
 
   // dynamic catalog/object/transient services → network only
   if (DYNAMIC_HOSTS.includes(url.hostname)) return;
+
+  // hips2fits server-rendered images & cutouts → load natively, no interception. The CORS-forcing
+  // cache handler below makes plain <img> loads fail (net::ERR_FAILED) — that broke survey imagery.
+  if (url.pathname.includes('hips-image-services')) return;
 
   // CDS HiPS tiles / cutouts (cross-origin, CORS) → cache-first, capped, CORS-only
   if (CDS_TILE_HOSTS.includes(url.hostname)) {
