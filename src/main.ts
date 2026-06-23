@@ -184,6 +184,7 @@ let starLabelsOn = true;
 const toggleConst = document.getElementById('toggle-const') as HTMLButtonElement;
 toggleConst.addEventListener('click', () => {
   constellationsOn = toggleConst.classList.toggle('active');
+  if (viewMode === 'atlas') void atlas?.setConstellations(constellationsOn);
 });
 const toggleStars = document.getElementById('toggle-stars') as HTMLButtonElement;
 toggleStars.addEventListener('click', () => {
@@ -260,12 +261,14 @@ function promptManualLocation(): void {
 // constellation boundaries + Messier toggles
 (document.getElementById('toggle-bounds') as HTMLButtonElement).addEventListener('click', (e) => {
   boundariesOn = (e.currentTarget as HTMLButtonElement).classList.toggle('active');
+  if (viewMode === 'atlas') void atlas?.setBoundaries(boundariesOn);
 });
 let messierOn = false;
 (document.getElementById('toggle-messier') as HTMLButtonElement).addEventListener('click', (e) => {
   messierOn = (e.currentTarget as HTMLButtonElement).classList.toggle('active');
-  // visibility is owned by the render loop (gated on nearEarth) — don't set it here, or it would
-  // flash for one frame if toggled while flying through deep space
+  if (viewMode === 'atlas') void atlas?.setMessier(messierOn);
+  // space-mode visibility is owned by the render loop (gated on nearEarth) — don't set it here, or
+  // it would flash for one frame if toggled while flying through deep space
 });
 (document.getElementById('toggle-hr') as HTMLButtonElement).addEventListener('click', (e) => {
   const on = (e.currentTarget as HTMLButtonElement).classList.toggle('active');
@@ -1212,6 +1215,13 @@ function setViewMode(m: 'atlas' | 'space'): void {
     worldToRaDec(viewDir, handoffRd);
     atlas?.setSurvey(currentSurvey);
     atlas?.goto(handoffRd.raRad * RAD2DEG, handoffRd.decRad * RAD2DEG, Math.min(controls.fovDeg, 60));
+  }
+  // entering atlas: mirror the current overlay-toggle state onto Aladin
+  if (m === 'atlas') {
+    void atlas?.setConstellations(constellationsOn);
+    void atlas?.setBoundaries(boundariesOn);
+    void atlas?.setMessier(messierOn);
+    atlas?.setGrid(gridOn.equ);
   }
   // Three.js DOM overlays (star labels, Messier labels) only make sense in 3D mode
   starLabels.setVisible(m === 'space' && starLabelsOn);

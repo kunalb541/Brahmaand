@@ -17,6 +17,13 @@ function hipsFor(entry: SurveyEntry): string {
   return DSS2;
 }
 
+/** Show/hide an Aladin overlay or catalogue (both expose optional show()/hide() in v3). */
+function toggle(layer: { show?(): void; hide?(): void } | undefined, on: boolean): void {
+  if (!layer) return;
+  if (on) layer.show?.();
+  else layer.hide?.();
+}
+
 export class AtlasView {
   private al: AladinInstance | null = null;
   ready = false;
@@ -25,6 +32,10 @@ export class AtlasView {
   private pendingSurvey: SurveyEntry;
   private pendingGoto: [number, number, number] | null = null;
   private gridOn = false;
+  // lazily-built overlays (constellation figures, IAU boundaries, Messier catalogue) + their
+  // wanted on/off state, re-applied once the engine is ready.
+  private overlays: { const?: AladinOverlay; bounds?: AladinOverlay; messier?: AladinCatalog } = {};
+  private want = { const: false, bounds: false, messier: false };
 
   constructor(container: string, initial: SurveyEntry, onIdentify: (raDeg: number, decDeg: number) => void) {
     this.onIdentify = onIdentify;
@@ -51,6 +62,9 @@ export class AtlasView {
         this.wireClicks();
         this.setSurvey(this.pendingSurvey); // apply the latest requested survey (+ any field-survey fly)
         if (this.gridOn) this.setGrid(true);
+        if (this.want.const) void this.setConstellations(true);
+        if (this.want.bounds) void this.setBoundaries(true);
+        if (this.want.messier) void this.setMessier(true);
         if (this.pendingGoto) this.goto(...this.pendingGoto);
       })
       .catch((e) => console.warn('[atlas] Aladin Lite failed to init', e));
@@ -101,6 +115,84 @@ export class AtlasView {
   setGrid(on: boolean): void {
     this.gridOn = on;
     this.al?.setCooGrid({ enabled: on, color: 'rgb(120,160,220)', opacity: 0.5 });
+  }
+
+  /** Constellation stick-figures, drawn from the same GeoJSON the 3D scene uses. */
+  async setConstellations(on: boolean): Promise<void> {
+    this.want.const = on;
+    if (!this.al) return;
+    if (on && !this.overlays.const) {
+      this.overlays.const = await this.buildLines('data/constellations.lines.json', 'rgb(86,138,205)', 1.4);
+    }
+    toggle(this.overlays.const, on);
+  }
+
+  /** IAU constellation boundaries. */
+  async setBoundaries(on: boolean): Promise<void> {
+    this.want.bounds = on;
+    if (!this.al) return;
+    if (on && !this.overlays.bounds) {
+      this.overlays.bounds = await this.buildLines('data/constellations.bounds.json', 'rgba(120,110,160,0.55)', 0.8);
+    }
+    toggle(this.overlays.bounds, on);
+  }
+
+  /** Messier catalogue markers+labels; clicking one routes through `objectClicked` → identify. */
+  async setMessier(on: boolean): Promise<void> {
+    this.want.messier = on;
+    if (!this.al) return;
+    if (on && !this.overlays.messier) {
+      this.overlays.messier = await this.buildMessier('data/messier.json');
+    }
+    toggle(this.overlays.messier, on);
+  }
+
+  /** Build a graphic overlay of polylines from a constellations.* GeoJSON (lines or boundaries). */
+  private async buildLines(url: string, color: string, lineWidth: number): Promise<AladinOverlay> {
+    const ov = A.graphicOverlay({ color, lineWidth });
+    this.al!.addOverlay(ov);
+    try {
+      const gj = (await (await fetch(url)).json()) as {
+        features: { geometry: { type: string; coordinates: number[][][] } }[];
+      };
+      for (const f of gj.features) {
+        const g = f.geometry;
+        if (g.type !== 'MultiLineString' && g.type !== 'Polygon') continue;
+        for (const line of g.coordinates) {
+          // GeoJSON is [lon=RA, lat=Dec] in degrees (RA may be negative; Aladin wraps it).
+          const pts = line.map(([ra, dec]) => [ra, dec]);
+          if (pts.length > 1) ov.add(A.polyline(pts));
+        }
+      }
+    } catch (e) {
+      console.warn('[atlas] overlay load failed', url, e);
+    }
+    return ov;
+  }
+
+  private async buildMessier(url: string): Promise<AladinCatalog> {
+    const cat = A.catalog({
+      name: 'Messier',
+      sourceSize: 16,
+      color: 'rgb(150,210,180)',
+      shape: 'circle',
+      displayLabel: true,
+      labelColumn: 'id',
+      labelColor: 'rgb(150,210,180)',
+      labelFont: '11px sans-serif',
+    });
+    this.al!.addCatalog(cat);
+    try {
+      const data = (await (await fetch(url)).json()) as {
+        objects: { m: number; ra: number; dec: number; otype?: string }[];
+      };
+      cat.addSources(
+        data.objects.map((o) => A.source(o.ra, o.dec, { id: `M${o.m}`, otype: o.otype ?? '' })),
+      );
+    } catch (e) {
+      console.warn('[atlas] Messier load failed', e);
+    }
+    return cat;
   }
 
   /** The survey currently shown (so the survey switcher and Three.js stay in sync). */

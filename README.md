@@ -50,14 +50,17 @@ web app, installs as **native iOS / Android apps**, works offline as a **PWA**, 
 
 Three pillars:
 
-1. **Real-imagery sky.** Actual survey photography — a DSS2 colour all-sky base with deeper surveys
-   (Pan-STARRS, DES, DECaPS, unWISE, Rubin First Look, HST and JWST fields, Mellinger Milky Way)
-   streamed as **HiPS** tiles (the IVOA Hierarchical Progressive Survey standard) from CDS. Pan,
-   zoom to telescope resolution, switch surveys, adjust exposure — everything you see is a real
-   photograph of the sky, correctly aligned so every overlay sits on the right stars.
+1. **Interactive sky atlas.** Actual survey photography — a DSS2 colour all-sky base with deeper
+   surveys (Pan-STARRS, DES, DECaPS, unWISE, Rubin First Look, HST and JWST fields, Mellinger Milky
+   Way) streamed as **HiPS** tiles (the IVOA Hierarchical Progressive Survey standard) from CDS and
+   rendered by **[Aladin Lite](https://aladin.cds.unistra.fr/)**, the same WebGL2 atlas engine
+   observatory portals embed. Smooth GPU pan/zoom to telescope resolution, switch surveys, overlay
+   constellation figures / IAU boundaries / Messier / a coordinate grid, and click anything to
+   identify it via SIMBAD. This is the default **atlas** view.
 2. **Real-distance 3D flythrough.** ~748,000 real stars — 639k from **Gaia DR3** plus 109k from
    **HYG** (within 5,000 pc) — placed at their true parallax distances and rendered as a custom
-   Three.js point field. Leave Earth and fly through the actual solar neighbourhood.
+   Three.js point field. One toggle flips to **3D** mode: leave Earth and fly through the actual
+   solar neighbourhood — solar system, time machine and VR included.
 3. **Live time-domain layer (Pro).** All-sky transient and variable-star alerts from community
    brokers — **ALeRCE/ZTF** (dense, classified) and **ANTARES** (the real Rubin/LSST + ZTF stream) —
    with machine-learning classifications, light curves, image-subtraction stamps, period-finding and
@@ -68,7 +71,7 @@ Three pillars:
 One codebase, two experiences — switch by toggle or `?mode=` URL, remembered per device:
 
 - **Public mode** — a clean, friendly sky: search, fly, “what’s up tonight”, share. Research chrome
-  hidden; the app auto-picks the best survey as you zoom.
+  hidden.
 - **Pro mode** (default) — catalogues, classifiers, RA/Dec readout, exposure, the full survey ladder
   and the complete time-domain toolset.
 
@@ -79,13 +82,13 @@ One codebase, two experiences — switch by toggle or `?mode=` URL, remembered p
 <details open>
 <summary><b>Sky &amp; imagery</b></summary>
 
-- **Real-sky survey atlas** — pan/zoom the whole night sky rendered from real telescope photography.
-- **Streaming telescope-resolution zoom (HiPS)** — deeper image tiles stream in and fade up as you zoom.
+- **Interactive sky atlas (Aladin Lite)** — pan/zoom the whole night sky rendered from real telescope photography, with smooth GPU streaming.
+- **Streaming telescope-resolution zoom (HiPS)** — deeper image tiles stream in as you zoom, down to galaxies and nebulae.
 - **Multi-survey ladder** — DSS2 colour base + Pan-STARRS, DES, DECaPS, unWISE (IR), Rubin First Look, HST and JWST fields.
-- **Survey switcher** *(Pro)* — a wavelength-coloured chip strip; clicking a survey always flies you to a field it actually covers (Andromeda in Pan-STARRS, the JWST Cosmic Cliffs…), so you never land on empty sky.
-- **Auto-survey selection** *(Public)* — the app silently picks the deepest survey for wherever you look.
+- **Survey switcher** — a wavelength-coloured chip strip; clicking a survey always flies you to a field it actually covers (Andromeda in Pan-STARRS, the JWST Cosmic Cliffs…), so you never land on empty sky.
+- **Atlas ⇄ 3D toggle** — one button swaps the imagery atlas for the Three.js flythrough/solar-system view; RA/Dec is carried across so the view stays continuous.
+- **Atlas overlays** — constellation figures, IAU boundaries, a Messier catalogue and a coordinate grid draw straight on the imagery; click the sky to identify what's there.
 - **Adaptive level-of-detail** — loads only the tiles you can see at the right resolution for your zoom.
-- **Exposure / brightness control** — a photographic slider brightens imagery and 3D stars together.
 </details>
 
 <details>
@@ -251,6 +254,7 @@ node tools/build-transients.mjs       # ANTARES Rubin/LSST     → public/transi
 | Component | Choice |
 |---|---|
 | Language / build | **TypeScript + Vite** (`typescript@6`, `vite@8`) |
+| Sky atlas (2D) | **[Aladin Lite v3](https://aladin.cds.unistra.fr/)** (CDS, LGPL-3.0) — WebGL2 HiPS atlas |
 | 3D engine | **Three.js** `WebGLRenderer` (`three@0.184`, pinned) |
 | Ephemeris | `astronomy-engine` (MIT — VSOP87/ELP) |
 | HEALPix math | `healpix-ts` (MIT) |
@@ -278,11 +282,13 @@ flowchart LR
     PIPE["build-gaia · build-stars<br/>build-messier · build-transients*"]
   end
   subgraph app["Browser / native shell (Capacitor)"]
-    CORE["Three.js renderer<br/>HiPS sphere + star field + solar system<br/>+ grids + transient markers"]
+    ATLAS["Atlas mode — Aladin Lite v3<br/>HiPS imagery + overlays + SIMBAD identify"]
+    CORE["3D mode — Three.js renderer<br/>star field + solar system<br/>+ grids + transient markers"]
     XR["WebXR ‘Enter VR’"]
   end
   ESA --> PIPE -->|"vendored under public/"| CORE
-  CDS --> CORE
+  CDS --> ATLAS
+  ATLAS <-->|"shared RA/Dec · sim clock · observer"| CORE
   BROKERS -->|"direct CORS, rate-limited,<br/>snapshot fallback"| CORE
   CORE --> XR
 ```
@@ -296,7 +302,7 @@ providers and carry their own licenses — **see [DATA-LICENSES.md](DATA-LICENSE
 authoritative attribution**, and [docs/USAGE-AND-LEGAL.md](docs/USAGE-AND-LEGAL.md) for per-provider
 usage rules. In short, with gratitude:
 
-- **CDS, Strasbourg** — HiPS tiles, hips2fits, SIMBAD, VizieR, Sesame, MocServer.
+- **CDS, Strasbourg** — **Aladin Lite v3** (the atlas engine, LGPL-3.0), HiPS tiles, hips2fits, SIMBAD, VizieR, Sesame, MocServer.
 - **ESA / Gaia / DPAC** — Gaia DR3 (the star distances); **astronexus** — the HYG database.
 - **STScI / DSS2**, **Pan-STARRS**, **DES**, **DECaPS / NOIRLab**, **unWISE**, **Rubin Observatory**,
   **HST**, **JWST**, and the **Mellinger** Milky Way panorama — survey imagery.

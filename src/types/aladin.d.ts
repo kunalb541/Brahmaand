@@ -21,10 +21,14 @@ interface AladinInstance {
 
 interface AladinCatalog {
   addSources(sources: unknown[]): void;
+  show?(): void;
+  hide?(): void;
 }
 interface AladinOverlay {
   add(shape: unknown): void;
   addFootprints(shapes: unknown[]): void;
+  show?(): void;
+  hide?(): void;
 }
 
 interface AladinStatic {
