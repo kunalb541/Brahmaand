@@ -4,7 +4,7 @@ Same model as iOS: the `dist/` web build wrapped by **Capacitor** into a native 
 (WebView + the same native plugins). The Gradle project is **committed at
 [`android/`](../android)** (its template `.gitignore` excludes build artifacts).
 
-> `./gradlew assembleDebug` produces `android/app/build/outputs/apk/debug/app-debug.apk` (~18 MB)
+> `./gradlew assembleDebug` produces `android/app/build/outputs/apk/debug/app-debug.apk` (~30 MB)
 > with the full feature set (solar system and time machine included), using Android Studio's bundled
 > JDK (JBR) + SDK android-36. Location permissions are declared in the manifest but optional — the
 > location and compass hardware features are marked `required="false"`, so the app installs and
@@ -44,7 +44,7 @@ The debug APK is a single self-contained file you can hand to anyone with an And
 
 ```bash
 cd android && ./gradlew assembleDebug
-# → android/app/build/outputs/apk/debug/app-debug.apk   (~18 MB)
+# → android/app/build/outputs/apk/debug/app-debug.apk   (~30 MB)
 ```
 
 1. **Send the file.** Email it, drop it in Google Drive/Dropbox and share the link, or use any

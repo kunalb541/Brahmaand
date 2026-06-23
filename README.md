@@ -11,7 +11,7 @@
 
 Brahmaand (Sanskrit for *the cosmos*) is a real-imagery sky atlas **and** a real-distance 3D flight
 through the stars — fed entirely by public astronomy services, with **no backend and no accounts**.
-Pan and zoom across real telescope photography of the whole sky, fly through ~747,000 real stars at
+Pan and zoom across real telescope photography of the whole sky, fly through ~748,000 real stars at
 their true distances, watch an arcsecond-accurate solar system run on a time machine, and (in Pro
 mode) follow live transient alerts from the same brokers professional astronomers use. It runs as a
 web app, installs as **native iOS / Android apps**, works offline as a **PWA**, and has an additive
@@ -55,8 +55,8 @@ Three pillars:
    streamed as **HiPS** tiles (the IVOA Hierarchical Progressive Survey standard) from CDS. Pan,
    zoom to telescope resolution, switch surveys, adjust exposure — everything you see is a real
    photograph of the sky, correctly aligned so every overlay sits on the right stars.
-2. **Real-distance 3D flythrough.** ~747,000 real stars — 638k from **Gaia DR3** plus the 109k
-   brightest from **HYG** — placed at their true parallax distances and rendered as a custom
+2. **Real-distance 3D flythrough.** ~748,000 real stars — 639k from **Gaia DR3** plus 109k from
+   **HYG** (within 5,000 pc) — placed at their true parallax distances and rendered as a custom
    Three.js point field. Leave Earth and fly through the actual solar neighbourhood.
 3. **Live time-domain layer (Pro).** All-sky transient and variable-star alerts from community
    brokers — **ALeRCE/ZTF** (dense, classified) and **ANTARES** (the real Rubin/LSST + ZTF stream) —
@@ -91,7 +91,7 @@ One codebase, two experiences — switch by toggle or `?mode=` URL, remembered p
 <details>
 <summary><b>Stars &amp; 3D flythrough</b></summary>
 
-- **Real-distance 3D star field** — ~747k stars (Gaia DR3 + HYG) at true parallax distances, brightness from real photometry.
+- **Real-distance 3D star field** — ~748k stars (Gaia DR3 + HYG) at true parallax distances, brightness from real photometry.
 - **Fly through the stars** — WASD/QE or an on-screen joystick, with boost and distance-scaled speed.
 - **Return to Earth** — snap the camera back home anytime.
 - **Bright-star labels** — Sirius, Vega, Polaris and other naked-eye stars labelled on the sky.
@@ -199,7 +199,7 @@ source — no store account needed for personal use:
 - **iOS** — `npm run ios:sync && npm run ios:open`, then ▶ to your iPhone from Xcode (free Apple-ID
   signing works). Full walkthrough: **[docs/IOS.md](docs/IOS.md)**.
 - **Android** — `cd android && ./gradlew assembleDebug` produces a sideloadable
-  `app-debug.apk` (~18 MB) you can AirDrop/email to a friend. Full walkthrough:
+  `app-debug.apk` (~30 MB) you can AirDrop/email to a friend. Full walkthrough:
   **[docs/ANDROID.md](docs/ANDROID.md)**.
 
 ---
@@ -210,7 +210,7 @@ source — no store account needed for personal use:
 npm install
 npm run dev        # → http://localhost:5173
 npm run build      # typecheck + production bundle into dist/
-npm test           # 42 unit tests (frames, ephemeris, observability, FITS, periodogram, device-sky)
+npm test           # 42 unit tests (frames, ephemeris, observability, FITS, periodogram, photometry, device-sky)
 ```
 
 Real assets are already vendored under `public/` (DSS2 + Mellinger all-sky JPEGs, constellation
@@ -310,7 +310,7 @@ or a PR. Good places to start:
 
 - **Data pipelines** (`tools/*.mjs`) — each script regenerates a bundled dataset from a real service.
 - **Tests** (`*.test.ts`, run with `npm test`) — coordinate frames, ephemeris anchors (the 2020 great
-  conjunction, the 2017 total eclipse), observability, FITS, periodogram and device-sky.
+  conjunction, the 2017 total eclipse), observability, FITS, periodogram, photometry and device-sky.
 - **Subsystems** live under `src/` (`sky/`, `stars/`, `data/`, `ui/`, `core/`). `npm run typecheck`
   must stay clean.
 

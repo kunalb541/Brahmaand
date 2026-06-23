@@ -98,16 +98,20 @@ describe('deviceSky — sky registration (singularity-free)', () => {
     expect(out.y).toBeCloseTo(0, 5); // on the horizon
   });
 
-  it('buildSkyQuat look direction matches the proven vector reference', () => {
+  it('buildSkyQuat look direction matches the proven vector reference (incl. nonzero yaw)', () => {
     const q = new THREE.Quaternion();
     const dirRef = new THREE.Vector3();
-    for (let a = 0; a < 360; a += 45) {
-      for (let b = 0; b <= 160; b += 40) {
-        buildSkyQuat(a * DEG, b * DEG, 0, 0, 0, LAT, LST, q);
-        const look = new THREE.Vector3(0, 0, -1).applyQuaternion(q); // camera −Z
-        const enu = deviceLookEnu(a * DEG, b * DEG, 0, 0);
-        enuToSkyDir(enu.E, enu.N, enu.U, 0, 0, LAT, LST, dirRef);
-        expect(look.angleTo(dirRef) * (180 / Math.PI)).toBeLessThan(0.01);
+    // yaw (compass seed + drag offset) must rotate the sky the SAME way in both functions —
+    // a sign mismatch here would mis-register north by the yaw amount in real GPS+compass use.
+    for (const yaw of [0, 30, -45, 90]) {
+      for (let a = 0; a < 360; a += 45) {
+        for (let b = 0; b <= 160; b += 40) {
+          buildSkyQuat(a * DEG, b * DEG, 0, 0, yaw * DEG, LAT, LST, q);
+          const look = new THREE.Vector3(0, 0, -1).applyQuaternion(q); // camera −Z
+          const enu = deviceLookEnu(a * DEG, b * DEG, 0, 0);
+          enuToSkyDir(enu.E, enu.N, enu.U, yaw * DEG, 0, LAT, LST, dirRef);
+          expect(look.angleTo(dirRef) * (180 / Math.PI)).toBeLessThan(0.01);
+        }
       }
     }
   });

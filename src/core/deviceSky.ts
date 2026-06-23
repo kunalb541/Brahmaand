@@ -159,8 +159,8 @@ export function buildSkyQuat(
     aimOfDate(lst + Math.PI / 2, 0, eVec, unixMs); // east horizon
     aimOfDate(lst, latRad, uVec, unixMs); // zenith
     aimOfDate(lst + Math.PI, Math.PI / 2 - latRad, nVec, unixMs); // north horizon
-    eRot.copy(eVec).applyAxisAngle(uVec, yaw);
-    nNeg.copy(nVec).applyAxisAngle(uVec, yaw).negate();
+    eRot.copy(eVec).applyAxisAngle(uVec, -yaw);
+    nNeg.copy(nVec).applyAxisAngle(uVec, -yaw).negate();
     mat.makeBasis(eRot, uVec, nNeg); // maps device axes (E,U,−N) → celestial
     qAlign.setFromRotationMatrix(mat);
     out.copy(qAlign).multiply(dev);

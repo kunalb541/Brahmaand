@@ -30,6 +30,7 @@ const OTYPE: Record<string, string> = {
 const FAMOUS = new Set([1, 8, 13, 16, 17, 20, 27, 31, 33, 42, 44, 45, 51, 57, 81, 87, 101, 104]);
 
 const v = new THREE.Vector3();
+const camPos = new THREE.Vector3();
 
 export class MessierLayer {
   private container: HTMLDivElement;
@@ -77,12 +78,13 @@ export class MessierLayer {
     const w = window.innerWidth;
     const h = window.innerHeight;
     const showAll = fovDeg < 35;
+    this.camera.getWorldPosition(camPos); // anchor labels at the (translated) camera, like the markers
     for (const it of this.items) {
       if (!showAll && !it.famous) {
         it.el.style.display = 'none';
         continue;
       }
-      v.copy(it.dir).project(this.camera);
+      v.copy(it.dir).add(camPos).project(this.camera);
       const onScreen = v.z < 1 && Math.abs(v.x) < 1.05 && Math.abs(v.y) < 1.05;
       it.el.style.display = onScreen ? 'block' : 'none';
       if (onScreen) {

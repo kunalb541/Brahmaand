@@ -130,7 +130,18 @@ function acquire(): Promise<void> {
   return new Promise((r) => waiters.push(r));
 }
 
-const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms: number, signal?: AbortSignal): Promise<void> =>
+  new Promise((res, rej) => {
+    const t = setTimeout(res, ms);
+    signal?.addEventListener(
+      'abort',
+      () => {
+        clearTimeout(t);
+        rej(new DOMException('Aborted', 'AbortError'));
+      },
+      { once: true },
+    );
+  });
 
 /**
  * Good-neighbour fetch for the shared broker APIs: on 429/503 it backs off exponentially
@@ -143,8 +154,9 @@ async function politeFetch(url: string, signal?: AbortSignal): Promise<Response>
     const r = await fetch(url, signal ? { signal } : {});
     if (r.status !== 429 && r.status !== 503) return r;
     if (attempt >= 2) return r; // surface the status; callers degrade gracefully
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
     const ra = parseFloat(r.headers.get('Retry-After') ?? '');
-    await sleep(isFinite(ra) ? Math.min(ra * 1000, 30000) : delay);
+    await sleep(isFinite(ra) ? Math.min(ra * 1000, 30000) : delay, signal);
     delay *= 2;
   }
 }

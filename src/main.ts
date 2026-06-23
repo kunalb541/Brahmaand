@@ -930,7 +930,7 @@ function applyViewHash(): void {
     if (sv && sv.id !== currentSurvey.id) void setSurvey(sv);
     const fov = parseFloat(p.get('fov') ?? '');
     controls.pointAt(ra * DEG2RAD, dec * DEG2RAD);
-    if (isFinite(fov)) controls.fovDeg = fov;
+    if (isFinite(fov)) controls.fovDeg = THREE.MathUtils.clamp(fov, 0.5, 100); // guard hand-edited links
   }
 }
 addEventListener('hashchange', applyViewHash);

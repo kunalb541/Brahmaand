@@ -17,6 +17,7 @@ const R = SKY_RADIUS * 0.985; // just inside the imagery
 const ZEN = new THREE.Vector3(); // current zenith (world)
 const UP = new THREE.Vector3(0, 1, 0);
 const v = new THREE.Vector3();
+const camPos = new THREE.Vector3();
 
 const CARDINALS: { az: number; label: string }[] = [
   { az: 0, label: 'N' }, { az: 45, label: 'NE' }, { az: 90, label: 'E' }, { az: 135, label: 'SE' },
@@ -106,6 +107,7 @@ export class Horizon {
     // cardinal directions (alt 0) → world → screen
     const w = window.innerWidth;
     const h = window.innerHeight;
+    this.camera.getWorldPosition(camPos); // anchor cardinal labels at the (translated) camera, like the ground mesh
     for (let i = 0; i < CARDINALS.length; i++) {
       const e = horizontalToEquatorial(0, CARDINALS[i]!.az, loc, unixMs);
       const it = this.labels[i]!;
@@ -114,7 +116,7 @@ export class Horizon {
         Math.sin(e.decDeg * DEG2RAD),
         Math.cos(e.decDeg * DEG2RAD) * Math.cos(e.raDeg * DEG2RAD),
       );
-      v.copy(it.dir).project(this.camera);
+      v.copy(it.dir).add(camPos).project(this.camera);
       const on = v.z < 1 && Math.abs(v.x) < 1.05 && Math.abs(v.y) < 1.05;
       it.el.style.display = on ? 'block' : 'none';
       if (on) {

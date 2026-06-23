@@ -37,6 +37,7 @@ const VIZIER_TAP = 'https://tapvizier.cds.unistra.fr/TAPVizieR/tap/sync';
 const acquire = (signal?: AbortSignal) => cdsLimiter.acquire(signal);
 
 const cache = new Map<string, CatalogSource[]>();
+const CACHE_CAP = 200; // bound long-session memory; evict oldest (Map preserves insertion order)
 
 /** Cone-query a catalogue around (ra,dec); returns up to `limit` sources. */
 export async function fetchCatalog(
@@ -72,6 +73,7 @@ export async function fetchCatalog(
     if (!isFinite(ra) || !isFinite(dec)) continue;
     out.push({ raDeg: ra, decDeg: dec, mag: iMag >= 0 && row[iMag] != null ? Number(row[iMag]) : null });
   }
+  if (cache.size >= CACHE_CAP) cache.delete(cache.keys().next().value as string);
   cache.set(key, out);
   return out;
 }

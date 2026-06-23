@@ -72,7 +72,7 @@ function parseHeader(buf: ArrayBuffer): { cards: Map<string, string>; dataStart:
 function num(cards: Map<string, string>, key: string, dflt: number): number {
   const v = cards.get(key);
   if (v == null) return dflt;
-  const n = parseFloat(v);
+  const n = parseFloat(v.replace(/[dD]/, 'e')); // accept Fortran 'D' exponent (e.g. 1.0D-04)
   return isFinite(n) ? n : dflt;
 }
 
@@ -88,6 +88,7 @@ function zscale(data: Float32Array, contrast = 0.25, nSamples = 600): { z1: numb
   if (samples.length < 5) {
     let mn = Infinity, mx = -Infinity;
     for (const v of samples) { if (v < mn) mn = v; if (v > mx) mx = v; }
+    if (!isFinite(mn) || !isFinite(mx) || mx <= mn) return { z1: 0, z2: 1 }; // all-NaN / degenerate
     return { z1: mn, z2: mx };
   }
   samples.sort((a, b) => a - b);

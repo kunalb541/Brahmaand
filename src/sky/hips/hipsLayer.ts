@@ -181,9 +181,9 @@ export class HipsLayer {
         }
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         const bmp = await createImageBitmap(await r.blob());
-        if (!this.tiles.has(this.key(t.order, t.npix))) {
+        if (this.tiles.get(this.key(t.order, t.npix)) !== t) {
           bmp.close();
-          return; // evicted while loading
+          return; // evicted (and possibly replaced) while loading — guard on identity, not key presence
         }
         this.buildMesh(t, bmp);
       })

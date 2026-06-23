@@ -23,6 +23,7 @@ const STARS: { name: string; ra: number; dec: number }[] = [
 ];
 
 const v = new THREE.Vector3();
+const camPos = new THREE.Vector3();
 
 export class StarLabels {
   private container: HTMLDivElement;
@@ -55,8 +56,9 @@ export class StarLabels {
     if (!this.visible) return;
     const w = window.innerWidth;
     const h = window.innerHeight;
+    this.camera.getWorldPosition(camPos); // labels are anchored at the (translated) camera, like the markers
     for (const { el, dir } of this.labels) {
-      v.copy(dir).project(this.camera);
+      v.copy(dir).add(camPos).project(this.camera);
       const onScreen = v.z < 1 && Math.abs(v.x) < 1.1 && Math.abs(v.y) < 1.1;
       if (!onScreen) {
         el.style.display = 'none';

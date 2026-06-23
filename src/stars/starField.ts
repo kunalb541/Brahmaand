@@ -19,7 +19,7 @@ const STAR_VERT = /* glsl */ `
     vec4 mv = modelViewMatrix * vec4(position, 1.0);
     float d = max(length(mv.xyz), 1e-4);                       // parsecs to camera
     float m = aAbsMag + 5.0 * (log2(d) * 0.3010299957 - 1.0);  // apparent magnitude
-    float I = uExposure * exp2(-1.3321928095 * (m - uMRef));   // 10^(-0.4Δm)
+    float I = uExposure * exp2(-1.3287712380 * (m - uMRef));   // 10^(-0.4Δm) = exp2(-0.4*log2(10)*Δm)
     float size = uCoreSize * sqrt(max(I, 1.0)) * uPixScale;
     gl_PointSize = clamp(size, uMinSize, uMaxSize);
     vBright = min(I, 1.0) * clamp(I / 0.04, 0.0, 1.0);         // sub-pixel alpha fade

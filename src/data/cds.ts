@@ -239,18 +239,22 @@ export function cutoutUrl(opts: {
 
 // ---------- formatters ----------
 export function formatRaHms(raDeg: number): string {
-  let h = (((raDeg / 15) % 24) + 24) % 24;
-  const hh = Math.floor(h);
-  const mm = Math.floor((h - hh) * 60);
-  const ss = ((h - hh) * 60 - mm) * 60;
+  const h = (((raDeg / 15) % 24) + 24) % 24;
+  let hh = Math.floor(h);
+  let mm = Math.floor((h - hh) * 60);
+  let ss = Math.round(((h - hh) * 60 - mm) * 600) / 10; // round to 0.1s first
+  if (ss >= 60) { ss -= 60; mm += 1; } // carry so we never print "60.0s"
+  if (mm >= 60) { mm -= 60; hh = (hh + 1) % 24; }
   return `${String(hh).padStart(2, '0')}h${String(mm).padStart(2, '0')}m${ss.toFixed(1).padStart(4, '0')}s`;
 }
 export function formatDecDms(decDeg: number): string {
   const sign = decDeg < 0 ? '-' : '+';
   const a = Math.abs(decDeg);
-  const d = Math.floor(a);
-  const m = Math.floor((a - d) * 60);
-  const s = Math.round(((a - d) * 60 - m) * 60);
+  let d = Math.floor(a);
+  let m = Math.floor((a - d) * 60);
+  let s = Math.round(((a - d) * 60 - m) * 60);
+  if (s >= 60) { s -= 60; m += 1; } // carry so we never print "60″"
+  if (m >= 60) { m -= 60; d += 1; }
   return `${sign}${String(d).padStart(2, '0')}°${String(m).padStart(2, '0')}′${String(s).padStart(2, '0')}″`;
 }
 
