@@ -6,6 +6,8 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>Brahmaand — real-sky atlas</title>
+    <!-- CDS Aladin Lite v3 — the interactive HiPS sky-atlas engine (atlas mode); exposes global `A` -->
+    <script src="https://aladin.cds.unistra.fr/AladinLite/api/v3/latest/aladin.js" charset="utf-8"></script>
     <style>
       :root {
         color-scheme: dark;
@@ -148,6 +150,9 @@
 
       #skyspace { flex: 1; position: relative; pointer-events: none; min-width: 0; }
       #skyspace > * { pointer-events: auto; }
+      /* Aladin Lite atlas view — fills the sky area, sits over the (hidden-in-atlas) WebGL canvas */
+      #aladin { position: absolute; inset: 0; width: 100%; height: 100%; background: #05080f; pointer-events: auto; }
+      #aladin .aladin-location, #aladin .aladin-fov { font: 11px ui-monospace, monospace; }
 
       #rightpanel {
         pointer-events: auto;
@@ -269,7 +274,7 @@
             <div class="sec-body" id="sec-tools"></div>
           </section>
         </aside>
-        <div id="skyspace"></div>
+        <div id="skyspace"><div id="aladin"></div></div>
         <aside id="rightpanel"></aside>
       </div>
       <div id="timebar">

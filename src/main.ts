@@ -5,7 +5,7 @@ import { startLoop } from './core/loop';
 import { StatsHud } from './core/stats';
 import { LookControls } from './core/lookControls';
 import { createSkySphere } from './sky/skySphere';
-import { SkyImagery } from './sky/skyImagery';
+import { AtlasView } from './sky/atlasView';
 import { createConstellationLines, createConstellationBoundaries } from './sky/constellations';
 import {
   createEquatorialGrid,
@@ -69,7 +69,11 @@ const attribEl = document.getElementById('attrib')!;
 // --- Sky sphere (real survey imagery) + live HiPS tile overlay ---
 let sky: THREE.Mesh | null = null;
 let currentSurvey = SURVEYS[0]!;
-const hips = new SkyImagery();
+// Atlas mode = Aladin Lite (interactive HiPS imagery, the default); Space mode = the Three.js 3D
+// scene (star flythrough, solar system, time machine, VR). The two swap; `atlas` is created once
+// the object panel exists (it feeds clicks back into the panel).
+let atlas: AtlasView | null = null;
+let viewMode: 'atlas' | 'space' = 'atlas';
 
 async function setSurvey(entry: SurveyEntry, opts?: { jump?: boolean }): Promise<void> {
   // Surveys with an equirect texture (DSS2, Milky Way) also reset the all-sky base sphere;
@@ -86,16 +90,19 @@ async function setSurvey(entry: SurveyEntry, opts?: { jump?: boolean }): Promise
     sky = next;
     scene.add(sky);
   }
-  hips.setConfig(entry.hips);
   currentSurvey = entry;
   applySkyExposure();
   attribEl.innerHTML = `${entry.attribution} · <a href="https://aladin.cds.unistra.fr" target="_blank" rel="noopener">CDS</a>`;
   for (const b of surveyButtons) b.classList.toggle('active', b.dataset.id === entry.id);
 
-  // A user CLICK should always SHOW that survey's imagery. Surveys cover only part of the sky;
-  // if the current view is outside this survey's footprint, fly to a showcase field it DOES
-  // cover (so you never land on empty, 404-ing tiles). If it's covered here but too wide to
-  // stream, zoom in place past the tile threshold (tiles only stream below ~3.5° FOV).
+  // Atlas mode: Aladin streams the survey (and flies a field survey to its showcase target).
+  if (viewMode === 'atlas') {
+    atlas?.setSurvey(entry);
+    return;
+  }
+
+  // Space mode (Three.js planetarium): a CLICK flies to a covered showcase field, else zooms in
+  // place past the tile threshold so you never land on empty, 404-ing sky.
   if (opts?.jump && entry.hips) {
     camera.getWorldDirection(jumpDir);
     worldToRaDec(jumpDir, jumpRd);
@@ -120,10 +127,7 @@ const jumpRd = { raRad: 0, decRad: 0 };
 // boost — the vendored all-sky JPEG is dark, which is why the Milky Way band was invisible).
 let skyStops = 0;
 function applySkyExposure(): void {
-  // HiPS tiles render at native brightness (dark sky + crisp sources, like the raw survey image).
-  // The slider scales them; default ~1x so bright targets stay sharp (boosting washes out contrast
-  // and bloats stars). Faint fields can be lifted with the slider.
-  hips.setExposure(Math.pow(2, skyStops));
+  // Exposure currently drives only the space-mode base sphere; atlas mode uses Aladin's own stretch.
   if (!sky) return;
   const boost = currentSurvey.id === 'dss2' ? 1.7 : 1;
   (sky.material as THREE.MeshBasicMaterial).color.setScalar(boost * Math.pow(2, skyStops));
@@ -198,7 +202,10 @@ scene.add(gridGroup);
 const gridOn = { equ: false, ecl: false, gal: false, hor: false };
 const wireGrid = (id: string, key: keyof typeof gridOn) => {
   const btn = document.getElementById(id) as HTMLButtonElement;
-  btn.addEventListener('click', () => (gridOn[key] = btn.classList.toggle('active')));
+  btn.addEventListener('click', () => {
+    gridOn[key] = btn.classList.toggle('active');
+    if (key === 'equ') atlas?.setGrid(gridOn.equ); // atlas mode uses Aladin's native coordinate grid
+  });
 };
 wireGrid('toggle-grid', 'equ');
 wireGrid('toggle-ecliptic', 'ecl');
@@ -542,10 +549,19 @@ if (isTouch) {
 // --- Object info: search box + click-to-identify (SIMBAD/Sesame/hips2fits, browser-direct) ---
 const objectPanel = new ObjectPanel({
   flyTo: (raDeg, decDeg, extended) => {
+    if (viewMode === 'atlas') {
+      atlas?.goto(raDeg, decDeg, extended ? 1 : 0.4); // Aladin frames the target
+      return;
+    }
     fly.reset(); // return to Earth so the sky imagery frames the target
     controls.flyTo(raDeg * DEG2RAD, decDeg * DEG2RAD, extended ? 2 : 4);
   },
-  getFovDeg: () => controls.fovDeg,
+  getFovDeg: () => (viewMode === 'atlas' ? atlas?.getView()?.fovDeg ?? controls.fovDeg : controls.fovDeg),
+});
+
+// Aladin Lite atlas view: clicks (empty sky or a catalogue marker) feed the existing object panel.
+atlas = new AtlasView('#aladin', currentSurvey, (raDeg, decDeg) => {
+  void objectPanel.identifyAt(raDeg, decDeg);
 });
 
 // Messier deep-sky labels (SIMBAD positions) — click a label to fly + inspect
@@ -830,7 +846,6 @@ for (const preset of CATALOGS) {
 const clickNdc = new THREE.Vector3();
 const clickCamPos = new THREE.Vector3();
 const clickRd = { raRad: 0, decRad: 0 };
-const autoRd = { raRad: 0, decRad: 0 }; // public auto-survey view direction
 let downX = 0;
 let downY = 0;
 let downT = 0;
@@ -947,7 +962,7 @@ function applyViewHash(): void {
 addEventListener('hashchange', applyViewHash);
 // debug handle
 (window as unknown as { __dbg: unknown }).__dbg = {
-  hips,
+  atlas,
   scene,
   camera,
   controls,
@@ -1172,9 +1187,44 @@ const hipsStatus = document.getElementById('hips-slot')!;
 hipsStatus.classList.add('pro-only');
 applyMode(); // re-apply: hipsStatus (pro-only) is tagged after the initial applyMode()
 
+// --- Atlas ⇄ 3D view toggle: Aladin imagery (default) vs the Three.js flythrough/solar-system scene ---
+const viewBtn = document.createElement('button');
+document.getElementById('topbar-actions')!.appendChild(viewBtn);
+const aladinEl = document.getElementById('aladin')!;
+const handoffRd = { raRad: 0, decRad: 0 };
+function setViewMode(m: 'atlas' | 'space'): void {
+  const prev = viewMode;
+  viewMode = m;
+  aladinEl.style.display = m === 'atlas' ? 'block' : 'none';
+  canvas.style.display = m === 'atlas' ? 'none' : 'block';
+  viewBtn.textContent = m === 'atlas' ? '🚀 3D' : '✦ Atlas';
+  viewBtn.title =
+    m === 'atlas'
+      ? 'Switch to the 3D star-field / solar-system view'
+      : 'Switch to the interactive sky atlas (survey imagery)';
+  // hand off the view direction + zoom so the switch is continuous
+  if (m === 'space') {
+    const v = atlas?.getView();
+    if (v) controls.pointAt(v.raDeg * DEG2RAD, v.decDeg * DEG2RAD);
+    controls.fovDeg = 70; // 3D mode is the planetarium/flythrough — open at a wide field, not the atlas zoom
+  } else if (prev === 'space') {
+    camera.getWorldDirection(viewDir);
+    worldToRaDec(viewDir, handoffRd);
+    atlas?.setSurvey(currentSurvey);
+    atlas?.goto(handoffRd.raRad * RAD2DEG, handoffRd.decRad * RAD2DEG, Math.min(controls.fovDeg, 60));
+  }
+  // Three.js DOM overlays (star labels, Messier labels) only make sense in 3D mode
+  starLabels.setVisible(m === 'space' && starLabelsOn);
+  messier.setVisible(m === 'space' && messierOn);
+}
+viewBtn.addEventListener('click', () => setViewMode(viewMode === 'atlas' ? 'space' : 'atlas'));
+setViewMode('atlas'); // default: the interactive sky atlas
+
 let hudAccum = 0;
 startLoop(renderer, (dt) => {
   try {
+    // Atlas mode: Aladin Lite owns the view; the Three.js scene is hidden and paused (saves GPU).
+    if (viewMode === 'atlas') return;
     // throttle text-HUD DOM writes to ~10 Hz — the 3-D scene still renders every frame, but
     // rebuilding the readout/status strings 60×/s is wasted main-thread work (smoother on mobile).
     hudAccum += dt;
@@ -1255,24 +1305,6 @@ startLoop(renderer, (dt) => {
     }
     starLabels.setVisible(starLabelsOn && f > 0.6);
 
-    hips.setCenter(rig.position);
-    hips.setVisible(nearEarth);
-    if (nearEarth) {
-      hips.update(camera);
-      // Public mode: auto-pick the deepest survey for the view (Pan-STARRS north / DES south),
-      // so detail "just appears" on zoom — the public never sees the observatory picker.
-      if (!isPro() && controls.fovDeg < 25) {
-        camera.getWorldDirection(viewDir);
-        worldToRaDec(viewDir, autoRd);
-        const wantId = (autoRd.decRad * RAD2DEG) > -28 ? 'panstarrs' : 'des';
-        if (currentSurvey.id !== wantId) {
-          const sv = SURVEYS.find((s) => s.id === wantId);
-          if (sv) void setSurvey(sv);
-        }
-      }
-    } else if (hips.hasImage) {
-      hips.clear(); // left Earth view → drop the survey image
-    }
 
     // transients: Earth-view only; refetch when the view pans far enough
     transientLayer.setCenter(rig.position);
@@ -1310,12 +1342,9 @@ startLoop(renderer, (dt) => {
     renderer.render(scene, camera);
     hud.tick(dt);
 
-    // survey-imagery status (server-rendered via hips2fits)
-    if (hudTick) hipsStatus.textContent =
-      dist < 1
-        ? `${currentSurvey.name}` +
-          (hips.loadingState ? ' · loading imagery…' : hips.hasImage ? ' · survey imagery' : ' · base sky (zoom in)')
-        : `flying · ${dist.toFixed(1)} pc from the Sun`;
+    if (hudTick)
+      hipsStatus.textContent =
+        dist < 1 ? `${currentSurvey.name} · 3D view` : `flying · ${dist.toFixed(1)} pc from the Sun`;
   } catch (e) {
     // surface instead of silently killing the animation loop
     (window as unknown as { __loopErr: unknown }).__loopErr = e;
