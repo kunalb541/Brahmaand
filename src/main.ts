@@ -5,7 +5,7 @@ import { startLoop } from './core/loop';
 import { StatsHud } from './core/stats';
 import { LookControls } from './core/lookControls';
 import { createSkySphere } from './sky/skySphere';
-import { HipsLayer } from './sky/hips/hipsLayer';
+import { SkyImagery } from './sky/skyImagery';
 import { createConstellationLines, createConstellationBoundaries } from './sky/constellations';
 import {
   createEquatorialGrid,
@@ -69,7 +69,7 @@ const attribEl = document.getElementById('attrib')!;
 // --- Sky sphere (real survey imagery) + live HiPS tile overlay ---
 let sky: THREE.Mesh | null = null;
 let currentSurvey = SURVEYS[0]!;
-const hips = new HipsLayer(scene);
+const hips = new SkyImagery();
 
 async function setSurvey(entry: SurveyEntry, opts?: { jump?: boolean }): Promise<void> {
   // Surveys with an equirect texture (DSS2, Milky Way) also reset the all-sky base sphere;
@@ -1270,11 +1270,8 @@ startLoop(renderer, (dt) => {
           if (sv) void setSurvey(sv);
         }
       }
-    } else if (hips.tileCount) {
-      // left Earth view → drop the streamed tiles (was previously mis-attached to the
-      // auto-survey `if`, which wiped the HiPS layer EVERY frame in Pro mode — the reason
-      // survey switching and zoomed tile streaming appeared completely dead)
-      hips.clear();
+    } else if (hips.hasImage) {
+      hips.clear(); // left Earth view → drop the survey image
     }
 
     // transients: Earth-view only; refetch when the view pans far enough
@@ -1313,17 +1310,11 @@ startLoop(renderer, (dt) => {
     renderer.render(scene, camera);
     hud.tick(dt);
 
-    // honest tile status: names the active survey and says when you're outside its coverage
+    // survey-imagery status (server-rendered via hips2fits)
     if (hudTick) hipsStatus.textContent =
       dist < 1
-        ? hips.order
-          ? `${currentSurvey.name} · order ${hips.order} · ${hips.readyCount}/${hips.tileCount} tiles` +
-            (hips.missingCount && hips.missingCount >= hips.tileCount - 1
-              ? ' · outside survey coverage'
-              : hips.missingCount
-                ? ` · ${hips.missingCount} off-coverage`
-                : '')
-          : `${currentSurvey.name} · base sky (zoom for telescope tiles)`
+        ? `${currentSurvey.name}` +
+          (hips.loadingState ? ' · loading imagery…' : hips.hasImage ? ' · survey imagery' : ' · base sky (zoom in)')
         : `flying · ${dist.toFixed(1)} pc from the Sun`;
   } catch (e) {
     // surface instead of silently killing the animation loop
