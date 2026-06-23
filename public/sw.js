@@ -1,7 +1,7 @@
 // Brahmaand service worker: offline app shell + cached catalogs/textures, plus a
 // capped cache for CORS-fetched CDS HiPS tiles. Dynamic data (SIMBAD/ALeRCE/Sesame) is never
 // cached. Bump CACHE_VERSION to invalidate. Registered only in production (see main.ts).
-const CACHE_VERSION = 'brahmaand-v1';
+const CACHE_VERSION = 'brahmaand-v2';
 const TILE_CACHE = 'brahmaand-tiles-v1';
 const TILE_MAX = 1500;
 
@@ -57,8 +57,29 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // same-origin app shell + catalogs + textures + data → cache-first, fill on first use
+  // same-origin
   if (url.origin === self.location.origin) {
+    // App shell (the page itself) → NETWORK-FIRST so new deploys actually reach users.
+    // (Cache-first here pinned every visitor to the FIRST build they ever loaded — they never
+    // saw any later deploy.) The HTML references hash-named JS, so a fresh page pulls fresh code.
+    const isShell =
+      req.mode === 'navigate' || url.pathname.endsWith('/') || url.pathname.endsWith('.html');
+    if (isShell) {
+      event.respondWith(
+        (async () => {
+          try {
+            const res = await fetch(req);
+            if (res.ok) (await caches.open(CACHE_VERSION)).put(req, res.clone());
+            return res;
+          } catch {
+            const cache = await caches.open(CACHE_VERSION);
+            return (await cache.match(req)) ?? (await cache.match('./')) ?? Response.error();
+          }
+        })(),
+      );
+      return;
+    }
+    // hash-named assets / catalogs / textures / data → cache-first (immutable; names change on rebuild)
     event.respondWith(
       caches.open(CACHE_VERSION).then(async (cache) => {
         const hit = await cache.match(req);
@@ -68,7 +89,6 @@ self.addEventListener('fetch', (event) => {
           if (res.ok) cache.put(req, res.clone());
           return res;
         } catch (e) {
-          // offline and uncached
           return hit ?? Response.error();
         }
       }),
