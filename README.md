@@ -82,7 +82,7 @@ One codebase, two experiences — switch by toggle or `?mode=` URL, remembered p
 - **Real-sky survey atlas** — pan/zoom the whole night sky rendered from real telescope photography.
 - **Streaming telescope-resolution zoom (HiPS)** — deeper image tiles stream in and fade up as you zoom.
 - **Multi-survey ladder** — DSS2 colour base + Pan-STARRS, DES, DECaPS, unWISE (IR), Rubin First Look, HST and JWST fields.
-- **Survey switcher** *(Pro)* — a wavelength-coloured chip strip; each flies you to a famous target (Eagle Nebula, JWST Cosmic Cliffs…).
+- **Survey switcher** *(Pro)* — a wavelength-coloured chip strip; clicking a survey always flies you to a field it actually covers (Andromeda in Pan-STARRS, the JWST Cosmic Cliffs…), so you never land on empty sky.
 - **Auto-survey selection** *(Public)* — the app silently picks the deepest survey for wherever you look.
 - **Adaptive level-of-detail** — loads only the tiles you can see at the right resolution for your zoom.
 - **Exposure / brightness control** — a photographic slider brightens imagery and 3D stars together.

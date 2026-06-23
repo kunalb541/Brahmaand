@@ -23,7 +23,7 @@ export class LookControls {
   private pinchDist = 0;
   private pinchFov = 0;
   private readonly damping = 6;
-  private readonly minFov = 0.5;
+  private readonly minFov = 0.05; // ~3′ — deep surveys reach order 11–14 (sub-arcsec), so allow real telescope zoom (e.g. the JWST/HST field mosaics are ~0.1°)
   private readonly maxFov = 100;
   private targetDir = new THREE.Vector3();
 

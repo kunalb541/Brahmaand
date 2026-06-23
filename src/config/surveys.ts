@@ -41,6 +41,7 @@ export const SURVEYS: SurveyEntry[] = [
     hemisphere: 'north',
     resolution: "0.2''",
     hips: { base: `${ALASKY}/Pan-STARRS/DR1/color-z-zg-g`, format: 'jpeg', maxOrder: 11 },
+    target: { raDeg: 10.6847, decDeg: 41.269, fovDeg: 2.5 }, // M31 Andromeda (well-covered north)
   },
   {
     id: 'des',
@@ -50,6 +51,7 @@ export const SURVEYS: SurveyEntry[] = [
     hemisphere: 'south',
     resolution: "0.2''",
     hips: { base: `${ALASKY}/DES/DR2/CDS_P_DES-DR2_ColorIRG`, format: 'png', maxOrder: 11 },
+    target: { raDeg: 53.4, decDeg: -36.14, fovDeg: 0.8 }, // NGC 1365, Fornax (DES southern cap)
   },
   {
     id: 'decaps',
@@ -59,6 +61,7 @@ export const SURVEYS: SurveyEntry[] = [
     hemisphere: 'south',
     resolution: "0.2''",
     hips: { base: `${ALASKY}/DECaPS/DR2/CDS_P_DECaPS_DR2_color`, format: 'png', maxOrder: 11 },
+    target: { raDeg: 161.26, decDeg: -59.68, fovDeg: 1.5 }, // Eta Carinae (southern galactic plane)
   },
   {
     id: 'unwise',
@@ -74,10 +77,10 @@ export const SURVEYS: SurveyEntry[] = [
     name: 'Rubin (First Look)',
     texture: null,
     attribution: 'Vera C. Rubin Observatory First Look · RubinObs/NOIRLab/SLAC/NSF/DOE/AURA · CDS HiPS',
-    hemisphere: 'south',
+    hemisphere: 'fields', // only the First Look fields are released so far, not a full hemisphere
     resolution: "0.1''",
     hips: { base: `${ALASKY}/Rubin/CDS_P_Rubin_FirstLook`, format: 'png', maxOrder: 12 },
-    target: { raDeg: 187.7, decDeg: 12.34, fovDeg: 1.6 }, // First Look: Virgo cluster field
+    target: { raDeg: 271.602, decDeg: -23.878, fovDeg: 2.8 }, // Rubin First Look field (below the ~3.5° tile-streaming threshold)
   },
   {
     id: 'hst',
@@ -87,7 +90,7 @@ export const SURVEYS: SurveyEntry[] = [
     hemisphere: 'fields',
     resolution: '25 mas',
     hips: { base: `${ALASKY}/HST-outreach/CDS_P_HST_EPO`, format: 'png', maxOrder: 14 },
-    target: { raDeg: 274.7, decDeg: -13.81, fovDeg: 0.9 }, // M16 Eagle Nebula (Pillars)
+    target: { raDeg: 83.097, decDeg: -67.701, fovDeg: 0.19 }, // HST EPO mosaic field (HiPS hips_initial)
   },
   {
     id: 'jwst-carina',
@@ -97,7 +100,7 @@ export const SURVEYS: SurveyEntry[] = [
     hemisphere: 'fields',
     resolution: '25 mas',
     hips: { base: `${ALASKY}/JWST/CDS_P_JWST_Carina-Nebula_NIRCam`, format: 'png', maxOrder: 14 },
-    target: { raDeg: 161.18, decDeg: -59.65, fovDeg: 0.45 }, // the NIRCam Cosmic Cliffs mosaic
+    target: { raDeg: 159.213, decDeg: -58.62, fovDeg: 0.12 }, // NIRCam Cosmic Cliffs (HiPS hips_initial)
   },
   {
     id: 'mellinger',

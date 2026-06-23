@@ -92,17 +92,24 @@ async function setSurvey(entry: SurveyEntry, opts?: { jump?: boolean }): Promise
   attribEl.innerHTML = `${entry.attribution} · <a href="https://aladin.cds.unistra.fr" target="_blank" rel="noopener">CDS</a>`;
   for (const b of surveyButtons) b.classList.toggle('active', b.dataset.id === entry.id);
 
-  // A user CLICK should visibly do something at any zoom: field surveys fly to a famous
-  // covered target; wide HiPS surveys zoom in place past the tile-streaming threshold
-  // (tiles only stream below ~3.5° FOV — at wide field only the all-sky base is visible).
-  if (opts?.jump) {
-    if (entry.target) {
+  // A user CLICK should always SHOW that survey's imagery. Surveys cover only part of the sky;
+  // if the current view is outside this survey's footprint, fly to a showcase field it DOES
+  // cover (so you never land on empty, 404-ing tiles). If it's covered here but too wide to
+  // stream, zoom in place past the tile threshold (tiles only stream below ~3.5° FOV).
+  if (opts?.jump && entry.hips) {
+    camera.getWorldDirection(jumpDir);
+    worldToRaDec(jumpDir, jumpRd);
+    const decDeg = jumpRd.decRad * RAD2DEG;
+    const coversView =
+      entry.hemisphere === 'all' ? true
+        : entry.hemisphere === 'north' ? decDeg > -28
+          : entry.hemisphere === 'south' ? decDeg < -28
+            : false; // 'fields' — only its small target footprint is covered
+    if (!coversView && entry.target) {
       fly.reset();
       controls.flyTo(entry.target.raDeg * DEG2RAD, entry.target.decDeg * DEG2RAD, entry.target.fovDeg);
-    } else if (entry.hips && !entry.texture && controls.fovDeg > 3.2) {
-      camera.getWorldDirection(jumpDir);
-      worldToRaDec(jumpDir, jumpRd);
-      controls.flyTo(jumpRd.raRad, jumpRd.decRad, 2.5);
+    } else if (!entry.texture && controls.fovDeg > 3.2) {
+      controls.flyTo(jumpRd.raRad, jumpRd.decRad, 2.5); // covered here → zoom in to start streaming
     }
   }
 }
@@ -930,7 +937,7 @@ function applyViewHash(): void {
     if (sv && sv.id !== currentSurvey.id) void setSurvey(sv);
     const fov = parseFloat(p.get('fov') ?? '');
     controls.pointAt(ra * DEG2RAD, dec * DEG2RAD);
-    if (isFinite(fov)) controls.fovDeg = THREE.MathUtils.clamp(fov, 0.5, 100); // guard hand-edited links
+    if (isFinite(fov)) controls.fovDeg = THREE.MathUtils.clamp(fov, 0.05, 100); // guard hand-edited links
   }
 }
 addEventListener('hashchange', applyViewHash);
