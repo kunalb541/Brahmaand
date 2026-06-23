@@ -111,11 +111,7 @@ export class HipsLayer {
     this.frame++;
 
     const fovYRad = (camera.fov * Math.PI) / 180;
-    // pickOrder must use the ACTUAL rendered pixel height. The renderer draws at
-    // setPixelRatio(min(dpr,2)), so on a retina screen CSS innerHeight is half the real
-    // resolution and tiles come out ~one order too coarse — bilinear-magnified into mush.
-    const renderPx = window.innerHeight * Math.min(window.devicePixelRatio || 1, 2);
-    const order = pickOrder(fovYRad, renderPx, 3, this.cfg.maxOrder);
+    const order = pickOrder(fovYRad, window.innerHeight, 3, this.cfg.maxOrder);
     this.order = order;
 
     if (order < MIN_STREAM_ORDER) {
@@ -227,7 +223,7 @@ export class HipsLayer {
     tex.generateMipmaps = false;
     tex.minFilter = THREE.LinearFilter;
     tex.magFilter = THREE.LinearFilter;
-    tex.anisotropy = 8; // match the base sphere; sharpens tiles toward the sphere edges
+    tex.anisotropy = 8;
     tex.flipY = false;
     tex.needsUpdate = true;
 
@@ -235,13 +231,23 @@ export class HipsLayer {
     const geo = buildTileGeometry(corners, SUBDIV, RADIUS);
     const mat = new THREE.MeshBasicMaterial({
       map: tex,
-      color: new THREE.Color().setScalar(this.exposure), // brightness (exposure slider)
+      color: new THREE.Color().setScalar(this.exposure), // pre-gain for the stretch (exposure slider)
       side: THREE.DoubleSide, // winding-agnostic; tiles are viewed from the sphere centre
       depthTest: false,
       depthWrite: false,
       transparent: true, // PNG no-coverage alpha lets the DSS2 base composite through
       opacity: 0, // fades in (§ FADE_MS) to avoid pops
     });
+    // Non-linear asinh display stretch. Survey colour tiles are dark/low-contrast (faint sky,
+    // bright sources near clipping); at native brightness most of the sky reads as black. asinh
+    // lifts faint detail into visibility while gently compressing highlights so nebula cores
+    // don't blow out — the standard astronomical image stretch (same idea as the FITS viewer).
+    mat.onBeforeCompile = (shader) => {
+      shader.fragmentShader = shader.fragmentShader.replace(
+        '#include <map_fragment>',
+        '#include <map_fragment>\n\tfloat _g = 12.0;\n\tdiffuseColor.rgb = asinh(diffuseColor.rgb * _g) / asinh(_g);',
+      );
+    };
     const mesh = new THREE.Mesh(geo, mat);
     mesh.renderOrder = -90 + t.order; // higher orders draw on top
     mesh.frustumCulled = false;
