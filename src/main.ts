@@ -1162,9 +1162,56 @@ document.getElementById('dock-burger')!.addEventListener('click', () => midrow.c
 // touching the sky dismisses the phone drawer
 canvas.addEventListener('pointerdown', () => midrow.classList.remove('dock-open'));
 
-// --- Service worker (offline shell + cached assets/tiles) — production only ---
-if (import.meta.env.PROD && 'serviceWorker' in navigator) {
-  addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
+// --- Service worker (offline shell + cached assets/tiles) — web (GitHub Pages) only ---
+// Goal: a deploy must reach users on a normal refresh (no hard-reload / clear-site-data). On
+// GitHub Pages (which serves everything with max-age=600) this needs:
+//   1. updateViaCache:'none' — the browser never reads sw.js from the HTTP cache on its update
+//      check, so a new SW is detected immediately (the SW itself does the no-store shell fetch).
+//   2. reg.update() when the tab regains focus — a long-open tab picks up deploys without a refresh.
+//   3. controllerchange / statechange → reload once — when a new SW activates (skipWaiting+claim),
+//      swap to the fresh code automatically. The controllerchange listener is attached
+//      SYNCHRONOUSLY (not inside load) so a soft-update that claims during the navigation→load gap
+//      — wide here, since `load` waits on the render-blocking Aladin CDN script — isn't missed; a
+//      statechange='activated' fallback covers a claim that landed before we could listen. The
+//      first-ever visit (no prior controller) never reloads.
+// Skipped in the Capacitor native webview (PROD is true there too, but the bundle ships in the app
+// binary, so a SW only adds pointless local-origin fetches + a hard-reload hazard); any SW a prior
+// native build registered is unregistered.
+const isNativeApp = !!(
+  window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }
+).Capacitor?.isNativePlatform?.();
+if (import.meta.env.PROD && 'serviceWorker' in navigator && !isNativeApp) {
+  const sw = navigator.serviceWorker;
+  const hadController = !!sw.controller; // read at module eval, before the load event fires
+  let reloaded = false;
+  const reloadOnce = (): void => {
+    if (reloaded || !hadController) return; // never reload the first-ever (uncontrolled) visit
+    reloaded = true;
+    location.reload();
+  };
+  sw.addEventListener('controllerchange', reloadOnce);
+  addEventListener('load', () => {
+    sw.register('./sw.js', { updateViaCache: 'none' })
+      .then((reg) => {
+        const track = (w: ServiceWorker | null): void => {
+          w?.addEventListener('statechange', () => {
+            if (w.state === 'activated') reloadOnce();
+          });
+        };
+        track(reg.installing);
+        track(reg.waiting);
+        reg.addEventListener('updatefound', () => track(reg.installing));
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'visible') reg.update().catch(() => {});
+        });
+      })
+      .catch(() => {});
+  });
+} else if (isNativeApp && 'serviceWorker' in navigator) {
+  navigator.serviceWorker
+    .getRegistrations?.()
+    .then((rs) => rs.forEach((r) => r.unregister()))
+    .catch(() => {});
 }
 
 // --- PRO ⇄ EXPLORE mode toggle ---
