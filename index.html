@@ -167,6 +167,7 @@
       /* ---- Bottom status bar: ONE flex line; sections shrink with ellipsis, never stack ---- */
       /* time machine bar — its own frame row, so it can never overlap other UI */
       #timebar {
+        pointer-events: auto; /* re-enable: #frame is pointer-events:none so the sky stays interactive */
         display: flex; gap: 6px; align-items: center; justify-content: center; flex-wrap: wrap;
         padding: 3px 10px; background: rgba(6, 12, 24, 0.78);
         border-top: 1px solid rgba(120, 170, 255, 0.12);

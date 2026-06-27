@@ -18,7 +18,7 @@ import {
 } from './sky/grids';
 import { MessierLayer } from './sky/messier';
 import { SolarSystemLayer } from './sky/solarSystem';
-import { solarSystemAt, angularSepDeg } from './data/ephemeris';
+import { solarSystemAt, angularSepDeg, BODY_COLOR } from './data/ephemeris';
 import { getObserver, setObserver, acquireObserver, horizontalToEquatorial } from './data/observability';
 import { Horizon } from './sky/horizon';
 import { HrDiagram } from './ui/hrDiagram';
@@ -353,6 +353,7 @@ let solarOn = true;
   document.getElementById('sec-overlays')!.appendChild(row);
   document.getElementById('toggle-solar')!.addEventListener('click', (e) => {
     solarOn = (e.currentTarget as HTMLButtonElement).classList.toggle('active');
+    if (viewMode === 'atlas') solarOn ? pushSolarToAtlas() : removeSolarFromAtlas();
   });
 }
 
@@ -637,10 +638,22 @@ atlas = new AtlasView(
   '#aladin',
   currentSurvey,
   (raDeg, decDeg, data) => {
+    // route by source kind (same precedence as the 3D raycast): solar body → transient → SIMBAD
+    const bodyId = typeof data?.body === 'string' ? data.body : null;
+    if (bodyId) {
+      const b = solarSystemAt(getSimMs()).find((x) => x.id === bodyId);
+      if (b) {
+        void objectPanel.showSolarBody(b);
+        return;
+      }
+    }
     const oid = typeof data?.oid === 'string' ? data.oid : null;
     const t = oid ? transientMap.get(oid) : undefined;
-    if (t) void objectPanel.showTransient(t);
-    else void objectPanel.identifyAt(raDeg, decDeg);
+    if (t) {
+      void objectPanel.showTransient(t);
+      return;
+    }
+    void objectPanel.identifyAt(raDeg, decDeg);
   },
   () => onAtlasViewChange(),
 );
@@ -696,6 +709,40 @@ function onAtlasViewChange(): void {
   if (viewMode !== 'atlas') return;
   for (const p of activeCatalogs.values()) void fetchCatalogNearView(p);
   if (transientsOn) void fetchTransientsNearView();
+}
+
+// --- Solar system on the atlas (Sun, Moon, planets at the sim-clock instant) ---
+const SOLAR_IDS = ['sun', 'moon', 'mercury', 'venus', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune'];
+/** Plot each body at its current ephemeris position; clicking one opens its panel (data.body=id). */
+function pushSolarToAtlas(): void {
+  for (const b of solarSystemAt(getSimMs())) {
+    const big = b.id === 'sun' || b.id === 'moon';
+    atlas?.setLayer(
+      `solar:${b.id}`,
+      hexCss(BODY_COLOR[b.id] ?? 0xffffff),
+      [{ raDeg: b.raDeg, decDeg: b.decDeg, label: b.name, data: { body: b.id } }],
+      { labels: true, size: big ? 16 : 11 },
+    );
+  }
+}
+function removeSolarFromAtlas(): void {
+  for (const id of SOLAR_IDS) atlas?.removeLayer(`solar:${id}`);
+}
+
+// The atlas has no per-frame render loop (the 3D loop early-returns), so a light 1 Hz tick advances
+// the time-dependent layers — the solar system as the clock/time-machine runs, and the horizon.
+let atlasTick: ReturnType<typeof setInterval> | null = null;
+function startAtlasTick(): void {
+  if (atlasTick) return;
+  atlasTick = setInterval(() => {
+    if (viewMode !== 'atlas') return;
+    if (solarOn) pushSolarToAtlas();
+    if (gridOn.hor && getObserver()) atlas?.setLines('hor', 'rgb(79,159,127)', 1, horizonLines());
+  }, 1000);
+}
+function stopAtlasTick(): void {
+  if (atlasTick) clearInterval(atlasTick);
+  atlasTick = null;
 }
 
 function applyTransients(): void {
@@ -1399,9 +1446,12 @@ function setViewMode(m: 'atlas' | 'space'): void {
     applyAtlasGrid('gal');
     applyAtlasGrid('hor');
     applyAtlasStars();
+    if (solarOn) pushSolarToAtlas();
     for (const p of activeCatalogs.values()) void fetchCatalogNearView(p);
     if (transientsOn) pushTransientsToAtlas();
   }
+  if (m === 'atlas') startAtlasTick();
+  else stopAtlasTick();
   // Three.js DOM overlays (star labels, Messier labels) only make sense in 3D mode
   starLabels.setVisible(m === 'space' && starLabelsOn);
   messier.setVisible(m === 'space' && messierOn);
