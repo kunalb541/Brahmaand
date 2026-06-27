@@ -152,6 +152,8 @@
       #skyspace > * { pointer-events: auto; }
       /* Aladin Lite atlas view — fills the sky area, sits over the (hidden-in-atlas) WebGL canvas */
       #aladin { position: absolute; inset: 0; width: 100%; height: 100%; background: #05080f; pointer-events: auto; }
+      /* 3D-scene-only tools (exposure, Return to Earth, FOV circle, Measure) are hidden in atlas mode */
+      body.atlas-mode .space-only { display: none !important; }
       #aladin .aladin-location, #aladin .aladin-fov { font: 11px ui-monospace, monospace; }
 
       #rightpanel {

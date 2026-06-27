@@ -417,7 +417,7 @@ function maxPointSize(): number {
 
 // flythrough UI: exposure slider (Imagery section) + "Return to Earth" / Share (Tools section)
 const expRow = document.createElement('div');
-expRow.className = 'row pro-only';
+expRow.className = 'row pro-only space-only'; // exposure drives the 3D base sphere; atlas uses Aladin's stretch
 expRow.innerHTML =
   '<label style="display:flex;align-items:center;gap:6px;width:100%">exposure ' +
   '<input id="exposure" type="range" min="-3" max="3" step="0.1" value="0" style="flex:1;min-width:80px"></label>';
@@ -429,6 +429,11 @@ toolsRow.innerHTML =
   '<button id="share-view" title="copy a link to this exact view">⌁ Share</button>' +
   '<button id="toggle-fov" title="Field-of-view framing circle (cycles common eyepiece/detector sizes)">⊕ FOV</button>' +
   '<button id="toggle-measure" title="Angular separation: click two points on the sky">📐 Measure</button>';
+// "Return to Earth", the FOV-framing circle and the click-two-points Measure are 3D-scene tools;
+// hide them in atlas mode (Aladin owns zoom/framing there). Share stays — it's atlas-aware.
+toolsRow
+  .querySelectorAll('#return-earth, #toggle-fov, #toggle-measure')
+  .forEach((b) => b.classList.add('space-only'));
 document.getElementById('sec-tools')!.appendChild(toolsRow);
 
 // angular-separation measurement: two sky clicks → great-circle distance + a drawn arc
@@ -1116,9 +1121,14 @@ window.goto = (raDeg, decDeg) => controls.pointAt(raDeg * DEG2RAD, decDeg * DEG2
 const shareRd = { raRad: 0, decRad: 0 };
 const shareDir = new THREE.Vector3();
 function currentViewHash(): string {
+  if (viewMode === 'atlas') {
+    const v = atlas?.getView();
+    if (v)
+      return `#mode=atlas&ra=${v.raDeg.toFixed(4)}&dec=${v.decDeg.toFixed(4)}&fov=${v.fovDeg.toFixed(3)}&survey=${currentSurvey.id}`;
+  }
   camera.getWorldDirection(shareDir);
   worldToRaDec(shareDir, shareRd);
-  return `#ra=${(shareRd.raRad * RAD2DEG).toFixed(4)}&dec=${(shareRd.decRad * RAD2DEG).toFixed(4)}&fov=${controls.fovDeg.toFixed(3)}&survey=${currentSurvey.id}`;
+  return `#mode=space&ra=${(shareRd.raRad * RAD2DEG).toFixed(4)}&dec=${(shareRd.decRad * RAD2DEG).toFixed(4)}&fov=${controls.fovDeg.toFixed(3)}&survey=${currentSurvey.id}`;
 }
 function applyViewHash(): void {
   const h = location.hash.replace(/^#/, '');
@@ -1126,13 +1136,19 @@ function applyViewHash(): void {
   const p = new URLSearchParams(h);
   const ra = parseFloat(p.get('ra') ?? '');
   const dec = parseFloat(p.get('dec') ?? '');
-  if (isFinite(ra) && isFinite(dec)) {
-    const surveyId = p.get('survey');
-    const sv = SURVEYS.find((s) => s.id === surveyId);
+  if (!isFinite(ra) || !isFinite(dec)) return;
+  const sv = SURVEYS.find((s) => s.id === p.get('survey'));
+  const fov = parseFloat(p.get('fov') ?? '');
+  if (p.get('mode') === 'space') {
+    if (viewMode !== 'space') setViewMode('space');
     if (sv && sv.id !== currentSurvey.id) void setSurvey(sv);
-    const fov = parseFloat(p.get('fov') ?? '');
     controls.pointAt(ra * DEG2RAD, dec * DEG2RAD);
     if (isFinite(fov)) controls.fovDeg = THREE.MathUtils.clamp(fov, 0.05, 100); // guard hand-edited links
+  } else {
+    // default (incl. legacy hashes without a mode) → the atlas
+    if (viewMode !== 'atlas') setViewMode('atlas');
+    if (sv && sv.id !== currentSurvey.id) void setSurvey(sv);
+    atlas?.goto(ra, dec, isFinite(fov) ? THREE.MathUtils.clamp(fov, 0.01, 100) : undefined);
   }
 }
 addEventListener('hashchange', applyViewHash);
@@ -1418,6 +1434,7 @@ const handoffRd = { raRad: 0, decRad: 0 };
 function setViewMode(m: 'atlas' | 'space'): void {
   const prev = viewMode;
   viewMode = m;
+  document.body.classList.toggle('atlas-mode', m === 'atlas'); // hides .space-only 3D tools in atlas
   aladinEl.style.display = m === 'atlas' ? 'block' : 'none';
   canvas.style.display = m === 'atlas' ? 'none' : 'block';
   viewBtn.textContent = m === 'atlas' ? '🚀 3D' : '✦ Atlas';
