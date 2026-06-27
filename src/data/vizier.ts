@@ -22,6 +22,10 @@ export const CATALOGS: CatalogPreset[] = [
   { id: '2mass', name: '2MASS', table: 'II/246/out', ra: 'RAJ2000', dec: 'DEJ2000', mag: 'Kmag', color: 0xff5533, band: 'near-IR' },
   { id: 'allwise', name: 'AllWISE', table: 'II/328/allwise', ra: 'RAJ2000', dec: 'DEJ2000', mag: 'W1mag', color: 0xffaa33, band: 'mid-IR' },
   { id: 'chandra', name: 'Chandra (X-ray)', table: 'IX/57/csc2master', ra: 'RAICRS', dec: 'DEICRS', mag: null, color: 0xcc66ff, band: 'X-ray' },
+  // wider multiwavelength spread (columns verified against the VizieR TAP schema 2026-06-27):
+  { id: 'tycho2', name: 'Tycho-2', table: 'I/259/tyc2', ra: 'RAmdeg', dec: 'DEmdeg', mag: 'VTmag', color: 0xbcd0ff, band: 'optical (bright)' },
+  { id: 'galexsrc', name: 'GALEX UV', table: 'II/335/galex_ais', ra: 'RAJ2000', dec: 'DEJ2000', mag: 'NUVmag', color: 0xc488ff, band: 'UV' },
+  { id: 'nvss', name: 'NVSS (radio)', table: 'VIII/65/nvss', ra: 'RAJ2000', dec: 'DEJ2000', mag: null, color: 0xff7fb0, band: 'radio 1.4 GHz' },
 ];
 
 export interface CatalogSource {

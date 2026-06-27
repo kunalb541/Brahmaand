@@ -31,4 +31,25 @@ describe('searchSuggest', () => {
   it('indexes all 110 Messier objects', () => {
     expect(SUGGEST_INDEX.filter((s) => /^M\d+$/.test(s.query)).length).toBe(110);
   });
+
+  it('covers the long tail: full NGC + IC catalogues', () => {
+    expect(SUGGEST_INDEX.some((s) => s.query === 'NGC 7000')).toBe(true);
+    expect(SUGGEST_INDEX.some((s) => s.query === 'NGC 7840')).toBe(true);
+    expect(SUGGEST_INDEX.some((s) => s.query === 'IC 5386')).toBe(true);
+    expect(searchSuggest('NGC 1300').some((s) => s.query === 'NGC 1300')).toBe(true);
+  });
+
+  it('ranks a named object above bare catalogue numbers on a (non-exact) prefix', () => {
+    // For "NGC 65": "NGC 65" itself is the exact match, but the named "NGC 6543 — Cat's Eye" must
+    // rank ahead of bare numeric entries like "NGC 650".
+    const r = searchSuggest('NGC 65');
+    const iNamed = r.findIndex((s) => s.query === 'NGC 6543');
+    const iBare = r.findIndex((s) => s.query === 'NGC 650');
+    expect(iNamed).toBeGreaterThanOrEqual(0);
+    expect(iBare === -1 || iNamed < iBare).toBe(true);
+  });
+
+  it('does not duplicate a famous NGC across the named + generated lists', () => {
+    expect(SUGGEST_INDEX.filter((s) => s.query === 'NGC 6543').length).toBe(1);
+  });
 });

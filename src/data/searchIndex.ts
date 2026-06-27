@@ -1,9 +1,9 @@
 /**
- * Search autocomplete index — instant, offline "recommendations while typing". Covers the objects
- * people actually search for: the planets, the brightest named stars, the full Messier catalogue
- * (with common names) and a curated set of famous non-Messier deep-sky objects. Anything not here
- * still resolves on Enter via the full Sesame/SIMBAD name service (objectPanel.onSearch), so the
- * index only needs to be *helpful*, not exhaustive.
+ * Search autocomplete index — instant, OFFLINE "recommendations while typing". A remote SIMBAD
+ * prefix-search was measured at ~10 s (or returns nothing), so the long tail is covered locally
+ * instead: the planets, the brightest named stars, the full Messier catalogue (with common names),
+ * a curated set of famous deep-sky objects, AND the complete NGC (1–7840) + IC (1–5386) catalogues.
+ * Anything still not here resolves on Enter via the full Sesame/SIMBAD name service.
  */
 import { STARS } from '../sky/starLabels';
 
@@ -72,22 +72,37 @@ export const SUGGEST_INDEX: Suggestion[] = [
   ...FAMOUS.map(([label, query]) => ({ label, query })),
 ];
 
-const norm = (s: string): string => s.toLowerCase().replace(/\s+/g, '');
+// The full NGC/IC catalogues for the long tail — generated, not stored (no bundle cost). Skip the
+// numbers already given a common name in FAMOUS so they aren't duplicated.
+const namedQueries = new Set(FAMOUS.map(([, q]) => q));
+for (let n = 1; n <= 7840; n++) {
+  const q = `NGC ${n}`;
+  if (!namedQueries.has(q)) SUGGEST_INDEX.push({ label: q, query: q });
+}
+for (let n = 1; n <= 5386; n++) {
+  const q = `IC ${n}`;
+  if (!namedQueries.has(q)) SUGGEST_INDEX.push({ label: q, query: q });
+}
 
-/** Rank suggestions for a partial query: prefix matches first, then substring, shorter labels win. */
+const norm = (s: string): string => s.toLowerCase().replace(/\s+/g, '');
+// Precompute normalised keys + a "named" flag (has a description beyond the bare id) once, so each
+// keystroke scans the ~13k-entry index in well under a millisecond.
+const NORM: Array<{ s: Suggestion; ln: string; qy: string; named: boolean }> = SUGGEST_INDEX.map(
+  (s) => ({ s, ln: norm(s.label), qy: norm(s.query), named: s.label !== s.query }),
+);
+
+/** Rank suggestions for a partial query: exact id → named prefix → bare prefix → substring. */
 export function searchSuggest(raw: string, limit = 8): Suggestion[] {
   const q = raw.trim();
   if (!q) return [];
   const qn = norm(q);
   const scored: Array<{ s: Suggestion; score: number }> = [];
-  for (const s of SUGGEST_INDEX) {
-    const ln = norm(s.label);
-    const qy = norm(s.query);
+  for (const e of NORM) {
     let score = -1;
-    if (qy === qn) score = 0; // exact id (e.g. "M31")
-    else if (qy.startsWith(qn) || ln.startsWith(qn)) score = 1; // prefix
-    else if (ln.includes(qn)) score = 2; // substring anywhere in the label
-    if (score >= 0) scored.push({ s, score });
+    if (e.qy === qn) score = 0; // exact id (e.g. "M31", "NGC 6543")
+    else if (e.qy.startsWith(qn) || e.ln.startsWith(qn)) score = e.named ? 1 : 2; // prefix, named first
+    else if (e.ln.includes(qn)) score = e.named ? 3 : 4; // substring (named first)
+    if (score >= 0) scored.push({ s: e.s, score });
   }
   scored.sort((a, b) => a.score - b.score || a.s.label.length - b.s.label.length);
   return scored.slice(0, limit).map((x) => x.s);
