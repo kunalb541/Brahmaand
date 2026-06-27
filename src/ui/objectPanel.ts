@@ -479,7 +479,8 @@ export class ObjectPanel {
       `</div>` +
       this.obsBlock(b.raDeg, b.decDeg) +
       `<div style="margin-top:8px;color:#5f7494;font-size:10px;border-top:1px solid rgba(120,170,255,.12);padding-top:6px">` +
-      `Ephemeris: astronomy-engine (VSOP87 / ELP) — J2000 ICRS, aberration-corrected, topocentric; ~arcsecond, validated vs JPL Horizons</div>`;
+      `Ephemeris: astronomy-engine (VSOP87 / ELP) — J2000 ICRS, aberration-corrected, ` +
+      `${b.topocentric ? 'topocentric' : 'geocentric'}; ~arcsecond, validated vs JPL Horizons</div>`;
     this.rerender = () => this.showSolarBody(b);
     this.show(rows);
   }

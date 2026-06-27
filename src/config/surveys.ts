@@ -12,9 +12,11 @@ export interface SurveyEntry {
   /** Equirect base texture (base spheres only — DSS2/Mellinger). null = HiPS-overlay only. */
   texture: string | null;
   attribution: string;
-  /** Coverage hint for the UI. */
+  /** Coverage class — drives the space-mode fly-to-target heuristic (coversView). */
   hemisphere: 'all' | 'north' | 'south' | 'fields';
-  /** ≈ resolution at max order, for the UI. */
+  /** Precise, astronomer-facing coverage label for the tooltip (overrides the coarse `hemisphere`). */
+  coverage?: string;
+  /** Approximate angular resolution (FWHM / native), for the UI. */
   resolution: string;
   /** Live HiPS tile streaming config (equatorial/ICRS surveys). null = equirect only. */
   hips: { base: string; format: string; maxOrder: number } | null;
@@ -40,6 +42,7 @@ export const SURVEYS: SurveyEntry[] = [
     texture: null,
     attribution: 'Pan-STARRS DR1 · PS1 Science Consortium · CDS HiPS',
     hemisphere: 'north',
+    coverage: 'dec > -30° (3π, ~78% sky)', // not a hemisphere: PS1 3π reaches well into the south
     resolution: "0.2''",
     hips: { base: `${ALASKY}/Pan-STARRS/DR1/color-z-zg-g`, format: 'jpeg', maxOrder: 11 },
     target: { raDeg: 10.6847, decDeg: 41.269, fovDeg: 2.5 }, // M31 Andromeda (well-covered north)
@@ -50,6 +53,7 @@ export const SURVEYS: SurveyEntry[] = [
     texture: null,
     attribution: 'Dark Energy Survey DR2 · DES Collaboration / NOIRLab · CDS HiPS',
     hemisphere: 'south',
+    coverage: 'S. cap, dec < -28° (~13% sky)',
     resolution: "0.2''",
     hips: { base: `${ALASKY}/DES/DR2/CDS_P_DES-DR2_ColorIRG`, format: 'png', maxOrder: 11 },
     target: { raDeg: 53.4, decDeg: -36.14, fovDeg: 0.8 }, // NGC 1365, Fornax (DES southern cap)
@@ -59,7 +63,10 @@ export const SURVEYS: SurveyEntry[] = [
     name: 'DECaPS',
     texture: null,
     attribution: 'DECaPS DR2 (southern galactic plane) · NOIRLab · CDS HiPS',
-    hemisphere: 'south',
+    // A narrow Galactic-plane strip (~7% of sky), NOT a southern hemisphere — so it must fly to its
+    // covered target rather than zoom in place (a 'south' tag would 404 on empty sky off the plane).
+    hemisphere: 'fields',
+    coverage: 'S. galactic plane (~7% sky)',
     resolution: "0.2''",
     hips: { base: `${ALASKY}/DECaPS/DR2/CDS_P_DECaPS_DR2_color`, format: 'png', maxOrder: 11 },
     target: { raDeg: 161.26, decDeg: -59.68, fovDeg: 1.5 }, // Eta Carinae (southern galactic plane)
@@ -69,7 +76,8 @@ export const SURVEYS: SurveyEntry[] = [
     name: 'SDSS',
     texture: null,
     attribution: 'SDSS DR9 · Sloan Digital Sky Survey · CDS HiPS',
-    hemisphere: 'north', // ~36% of sky (north galactic cap + stripes)
+    hemisphere: 'north',
+    coverage: 'N. galactic cap + stripes (~36% sky)',
     resolution: "0.4''",
     hips: { base: `${ALASKY}/SDSS/DR9/color`, format: 'jpeg', maxOrder: 10 },
     target: { raDeg: 202.4696, decDeg: 47.1953, fovDeg: 0.5 }, // M51 Whirlpool (SDSS hips_initial)
@@ -79,7 +87,8 @@ export const SURVEYS: SurveyEntry[] = [
     name: 'DESI Legacy',
     texture: null,
     attribution: 'DESI Legacy Imaging Surveys DR10 · NOIRLab/DOE/NSF · CDS HiPS',
-    hemisphere: 'all', // ~55% of sky (the deepest wide optical map)
+    hemisphere: 'all',
+    coverage: 'extragalactic sky (~55% sky)',
     resolution: "0.3''",
     hips: {
       base: `${ALASKY}/DESI-legacy-surveys/DR10/CDS_P_DESI-Legacy-Surveys_DR10_color`,
@@ -94,7 +103,7 @@ export const SURVEYS: SurveyEntry[] = [
     texture: null,
     attribution: 'unWISE W1/W2 mid-infrared · NASA/WISE · CDS HiPS',
     hemisphere: 'all',
-    resolution: "1.6''",
+    resolution: "6''", // WISE W1/W2 angular resolution (FWHM); the HiPS pixel scale is ~1.6''
     hips: { base: `${ALASKY}/unWISE/color-W2-W1W2-W1`, format: 'jpeg', maxOrder: 8 },
   },
   {

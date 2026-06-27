@@ -151,7 +151,7 @@ const surveyButtons: HTMLButtonElement[] = SURVEYS.map((s) => {
   label.textContent = s.name;
   b.append(dot, label);
   b.dataset.id = s.id;
-  b.title = `${s.hemisphere} · ${s.resolution}/px · tap to switch telescope (zoom in to stream)`;
+  b.title = `${s.coverage ?? s.hemisphere} · ${s.resolution} resolution · tap to switch telescope (zoom in to stream)`;
   b.addEventListener('click', () => void setSurvey(s, { jump: true }));
   surveyRow.appendChild(b);
   return b;

@@ -290,8 +290,8 @@ const OTYPE: Record<string, string> = {
   AGN: 'Active galactic nucleus',
   Sy: 'Seyfert galaxy',
   QSO: 'Quasar',
-  GiG: 'Galaxy in group',
-  GiC: 'Galaxy in cluster',
+  GiG: 'Galaxy toward a group', // SIMBAD: projection ("towards"), not confirmed membership
+  GiC: 'Galaxy toward a cluster', // SIMBAD: projection ("towards"), not confirmed membership
   GrG: 'Group of galaxies',
   ClG: 'Cluster of galaxies',
   rG: 'Radio galaxy',

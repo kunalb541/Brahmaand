@@ -35,16 +35,22 @@ export interface BodyEphemeris {
   topocentric: boolean;
 }
 
-const BODY_META: Record<string, { name: string; radiusKm: number; color: number; body: Astronomy.Body }> = {
-  sun: { name: 'Sun', radiusKm: 695700, color: 0xfff2c0, body: Astronomy.Body.Sun },
-  moon: { name: 'Moon', radiusKm: 1737.4, color: 0xd8dce6, body: Astronomy.Body.Moon },
-  mercury: { name: 'Mercury', radiusKm: 2439.7, color: 0xb5aa9e, body: Astronomy.Body.Mercury },
-  venus: { name: 'Venus', radiusKm: 6051.8, color: 0xf2e3c0, body: Astronomy.Body.Venus },
-  mars: { name: 'Mars', radiusKm: 3389.5, color: 0xe08050, body: Astronomy.Body.Mars },
-  jupiter: { name: 'Jupiter', radiusKm: 69911, color: 0xd9b894, body: Astronomy.Body.Jupiter },
-  saturn: { name: 'Saturn', radiusKm: 58232, color: 0xe6d3a0, body: Astronomy.Body.Saturn },
-  uranus: { name: 'Uranus', radiusKm: 25362, color: 0xa8d8e0, body: Astronomy.Body.Uranus },
-  neptune: { name: 'Neptune', radiusKm: 24622, color: 0x7aa0e8, body: Astronomy.Body.Neptune },
+// radiusKm = IAU volumetric mean radius (physical use). equatorialKm = IAU 1-bar equatorial radius:
+// the apparent disk is dominated by the equatorial radius, so it's what JPL Horizons "Ang-diam" and
+// the Astronomical Almanac report — using the mean radius would understate the gas giants by ~1″.
+const BODY_META: Record<
+  string,
+  { name: string; radiusKm: number; equatorialKm: number; color: number; body: Astronomy.Body }
+> = {
+  sun: { name: 'Sun', radiusKm: 695700, equatorialKm: 695700, color: 0xfff2c0, body: Astronomy.Body.Sun },
+  moon: { name: 'Moon', radiusKm: 1737.4, equatorialKm: 1737.4, color: 0xd8dce6, body: Astronomy.Body.Moon },
+  mercury: { name: 'Mercury', radiusKm: 2439.7, equatorialKm: 2439.7, color: 0xb5aa9e, body: Astronomy.Body.Mercury },
+  venus: { name: 'Venus', radiusKm: 6051.8, equatorialKm: 6051.8, color: 0xf2e3c0, body: Astronomy.Body.Venus },
+  mars: { name: 'Mars', radiusKm: 3389.5, equatorialKm: 3396.2, color: 0xe08050, body: Astronomy.Body.Mars },
+  jupiter: { name: 'Jupiter', radiusKm: 69911, equatorialKm: 71492, color: 0xd9b894, body: Astronomy.Body.Jupiter },
+  saturn: { name: 'Saturn', radiusKm: 58232, equatorialKm: 60268, color: 0xe6d3a0, body: Astronomy.Body.Saturn },
+  uranus: { name: 'Uranus', radiusKm: 25362, equatorialKm: 25559, color: 0xa8d8e0, body: Astronomy.Body.Uranus },
+  neptune: { name: 'Neptune', radiusKm: 24622, equatorialKm: 24764, color: 0x7aa0e8, body: Astronomy.Body.Neptune },
 };
 
 const ORDER = ['sun', 'moon', 'mercury', 'venus', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune'];
@@ -90,7 +96,7 @@ export function solarSystemAt(unixMs: number): BodyEphemeris[] {
       decDeg,
       distAU,
       distKm,
-      angDiamDeg: 2 * Math.asin(meta.radiusKm / distKm) * RAD,
+      angDiamDeg: 2 * Math.asin(meta.equatorialKm / distKm) * RAD, // equatorial disk (matches Horizons Ang-diam)
       magV,
       illum,
       phaseAngleDeg,
