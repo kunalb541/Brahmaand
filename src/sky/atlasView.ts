@@ -58,6 +58,7 @@ export class AtlasView {
   private lineLayers = new Map<string, AladinOverlay>();
   private pendingLines = new Map<string, { color: string; lineWidth: number; lines: number[][][] }>();
   private viewTimer: ReturnType<typeof setTimeout> | null = null;
+  private lastObjClickMs = 0;
 
   constructor(
     container: string,
@@ -105,18 +106,24 @@ export class AtlasView {
 
   private wireClicks(): void {
     const al = this.al!;
-    // a catalogue source / marker (Messier, a VizieR source, a transient…) was clicked. Its `data`
-    // (set in setLayer) lets the app route the click — e.g. a transient oid opens its light curve.
+    // A catalogue source / marker (Messier, a VizieR source, a transient, a planet, a star label)
+    // was clicked. Its `data` (set in setLayer) lets the app route the click — e.g. a transient oid
+    // opens its light curve. Aladin fires BOTH 'objectClicked' (first) and a plain 'click' for the
+    // same gesture, so stamp the time and let the click handler below ignore the duplicate.
     al.on('objectClicked', (o: unknown) => {
       const s = o as { ra?: number; dec?: number; data?: Record<string, unknown> } | null;
-      if (s && typeof s.ra === 'number' && typeof s.dec === 'number') this.onPick(s.ra, s.dec, s.data);
+      if (s && typeof s.ra === 'number' && typeof s.dec === 'number') {
+        this.lastObjClickMs = performance.now();
+        this.onPick(s.ra, s.dec, s.data);
+      }
     });
-    // empty-sky click → identify what's at that pixel
+    // Empty-sky click → identify whatever is there. The v3 'click' event carries ra/dec directly
+    // (NOT offsetX/offsetY — the previous bug); skip drags and clicks already handled as a source.
     al.on('click', (e: unknown) => {
-      const me = e as { offsetX?: number; offsetY?: number } | null;
-      if (!me || me.offsetX == null || me.offsetY == null) return;
-      const rd = al.pix2world(me.offsetX, me.offsetY);
-      if (rd) this.onPick(rd[0], rd[1]);
+      const c = e as { ra?: number; dec?: number; isDragging?: boolean } | null;
+      if (!c || c.isDragging || typeof c.ra !== 'number' || typeof c.dec !== 'number') return;
+      if (performance.now() - this.lastObjClickMs < 400) return;
+      this.onPick(c.ra, c.dec);
     });
   }
 
@@ -326,5 +333,10 @@ export class AtlasView {
   /** The survey currently shown (so the survey switcher and Three.js stay in sync). */
   get survey(): SurveyEntry {
     return this.pendingSurvey;
+  }
+
+  /** The underlying Aladin instance (debug/diagnostics only). */
+  get instance(): AladinInstance | null {
+    return this.al;
   }
 }
