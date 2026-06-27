@@ -59,6 +59,9 @@ export class AtlasView {
   private pendingLines = new Map<string, { color: string; lineWidth: number; lines: number[][][] }>();
   private viewTimer: ReturnType<typeof setTimeout> | null = null;
   private lastObjClickMs = 0;
+  private exposureStops = 0;
+  private fovOverlay: AladinOverlay | null = null;
+  private fovDiam: number | null = null;
 
   constructor(
     container: string,
@@ -99,6 +102,8 @@ export class AtlasView {
         this.pendingLayers.clear();
         for (const [id, l] of this.pendingLines) this.setLines(id, l.color, l.lineWidth, l.lines);
         this.pendingLines.clear();
+        this.applyExposure();
+        if (this.fovDiam != null) this.setFovCircle(this.fovDiam);
         if (this.pendingGoto) this.goto(...this.pendingGoto);
       })
       .catch((e) => console.warn('[atlas] Aladin Lite failed to init', e));
@@ -144,7 +149,35 @@ export class AtlasView {
     this.pendingSurvey = entry;
     if (!this.al) return;
     this.al.setBaseImageLayer(hipsFor(entry));
+    this.applyExposure(); // the new base layer resets to native brightness — re-apply the slider
     if (entry.target) this.goto(entry.target.raDeg, entry.target.decDeg, entry.target.fovDeg);
+  }
+
+  /** Exposure slider → Aladin base-layer brightness (stops [-3,3] → brightness offset [-1,1]). */
+  setExposure(stops: number): void {
+    this.exposureStops = stops;
+    this.applyExposure();
+  }
+  private applyExposure(): void {
+    this.al?.getBaseImageLayer?.()?.setBrightness?.(Math.max(-1, Math.min(1, this.exposureStops / 3)));
+  }
+
+  /** Eyepiece/detector framing circle of a TRUE angular diameter at the view centre (null = off). */
+  setFovCircle(diamDeg: number | null): void {
+    this.fovDiam = diamDeg;
+    if (!this.al) return;
+    if (!this.fovOverlay) {
+      this.fovOverlay = A.graphicOverlay({ color: 'rgb(111,227,255)', lineWidth: 1.5 });
+      this.al.addOverlay(this.fovOverlay);
+    }
+    this.fovOverlay.removeAll?.();
+    if (diamDeg == null) return;
+    const [ra, dec] = this.al.getRaDec();
+    this.fovOverlay.add(A.circle(ra, dec, diamDeg / 2));
+  }
+  /** Re-centre the framing circle after a pan/zoom. */
+  refreshFovCircle(): void {
+    if (this.fovDiam != null) this.setFovCircle(this.fovDiam);
   }
 
   /** Point the view at an ICRS position (degrees), optionally setting the field of view. */

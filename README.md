@@ -124,7 +124,7 @@ One codebase, two experiences — switch by toggle or `?mode=` URL, remembered p
 <summary><b>Catalogues &amp; deep-sky objects</b></summary>
 
 - **Messier catalogue (M1–M110)** — all 110 galaxies, nebulae and clusters from SIMBAD, with clickable fly-to labels that declutter at wide fields.
-- **VizieR multiwavelength overlays** *(Pro)* — overlay real source catalogues (Gaia optical, 2MASS near-IR, AllWISE mid-IR, Chandra X-ray) on the same field.
+- **VizieR multiwavelength overlays** *(Pro)* — overlay real source catalogues spanning radio→X-ray on the same field: NVSS (radio), GALEX (UV), Tycho-2 & Gaia (optical), 2MASS (near-IR), AllWISE (mid-IR), Chandra (X-ray); brightest-first, re-queried as you pan.
 - **Deep-sky image cutouts** — real survey imagery for any field, as a picture or as scientific FITS data.
 </details>
 
@@ -142,7 +142,7 @@ One codebase, two experiences — switch by toggle or `?mode=` URL, remembered p
 <summary><b>Identify, search &amp; inspect</b></summary>
 
 - **Click or tap to identify anything** — solar-system body, then live transient, otherwise the nearest SIMBAD source (works in both the atlas and 3D modes).
-- **Search with autocomplete** — recommendations appear as you type (planets, the brightest stars, all 110 Messier objects with common names, and famous deep-sky objects); arrow-keys/Enter or click to pick. Names/coordinates not in the list still resolve via Sesame + SIMBAD.
+- **Search with autocomplete** — recommendations appear as you type, covering the planets, the brightest named stars, all 110 Messier objects (with common names) and the full NGC + IC catalogues (~13k objects), ranked named-first; arrow-keys/Enter or click to pick. Anything else still resolves via Sesame + SIMBAD on Enter.
 - **Rich object info panel** — type, coordinates, magnitudes, spectral class, distance, proper motion, radial velocity, with links to SIMBAD and ESASky.
 - **Finder-chart cutouts** — a DSS2 thumbnail with centring reticle, N/E marks and a field-scaled bar, like a telescope finder.
 - **Angular-separation tool** — click two points for the great-circle angle in °/′/″, with a drawn, chainable arc.

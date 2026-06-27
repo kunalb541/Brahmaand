@@ -18,7 +18,15 @@ interface AladinInstance {
   removeLayer(layer: unknown): void;
   removeLayers(): void;
   setFrame(frame: string): void;
+  getBaseImageLayer(): AladinImageLayer | null;
   on(event: string, callback: (...args: unknown[]) => void): void;
+}
+
+interface AladinImageLayer {
+  setBrightness?(value: number): void; // offset, ~[-1, 1], 0 = native
+  setContrast?(value: number): void;
+  setGamma?(value: number): void;
+  setColormap?(name: string, options?: Record<string, unknown>): void;
 }
 
 interface AladinCatalog {
@@ -45,6 +53,7 @@ interface AladinStatic {
   marker(ra: number, dec: number, options?: Record<string, unknown>, data?: Record<string, unknown>): unknown;
   graphicOverlay(options?: Record<string, unknown>): AladinOverlay;
   polyline(radecArray: number[][], options?: Record<string, unknown>): unknown;
+  circle(raDeg: number, decDeg: number, radiusDeg: number, options?: Record<string, unknown>): unknown;
 }
 
 declare const A: AladinStatic;

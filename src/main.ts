@@ -18,7 +18,7 @@ import {
 } from './sky/grids';
 import { MessierLayer } from './sky/messier';
 import { SolarSystemLayer } from './sky/solarSystem';
-import { solarSystemAt, angularSepDeg, BODY_COLOR } from './data/ephemeris';
+import { solarSystemAt, angularSepDeg, BODY_COLOR, bodyRaDecAt } from './data/ephemeris';
 import { getObserver, setObserver, acquireObserver, horizontalToEquatorial } from './data/observability';
 import { Horizon } from './sky/horizon';
 import { HrDiagram } from './ui/hrDiagram';
@@ -128,8 +128,8 @@ const jumpRd = { raRad: 0, decRad: 0 };
 // boost — the vendored all-sky JPEG is dark, which is why the Milky Way band was invisible).
 let skyStops = 0;
 function applySkyExposure(): void {
-  // Exposure currently drives only the space-mode base sphere; atlas mode uses Aladin's own stretch.
-  if (!sky) return;
+  atlas?.setExposure(skyStops); // atlas mode: drive the Aladin base-layer brightness
+  if (!sky) return; // space mode: the Three.js base sphere
   const boost = currentSurvey.id === 'dss2' ? 1.7 : 1;
   (sky.material as THREE.MeshBasicMaterial).color.setScalar(boost * Math.pow(2, skyStops));
 }
@@ -417,7 +417,7 @@ function maxPointSize(): number {
 
 // flythrough UI: exposure slider (Imagery section) + "Return to Earth" / Share (Tools section)
 const expRow = document.createElement('div');
-expRow.className = 'row pro-only space-only'; // exposure drives the 3D base sphere; atlas uses Aladin's stretch
+expRow.className = 'row pro-only'; // exposure works in both modes (3D base sphere / Aladin brightness)
 expRow.innerHTML =
   '<label style="display:flex;align-items:center;gap:6px;width:100%">exposure ' +
   '<input id="exposure" type="range" min="-3" max="3" step="0.1" value="0" style="flex:1;min-width:80px"></label>';
@@ -429,11 +429,9 @@ toolsRow.innerHTML =
   '<button id="share-view" title="copy a link to this exact view">⌁ Share</button>' +
   '<button id="toggle-fov" title="Field-of-view framing circle (cycles common eyepiece/detector sizes)">⊕ FOV</button>' +
   '<button id="toggle-measure" title="Angular separation: click two points on the sky">📐 Measure</button>';
-// "Return to Earth", the FOV-framing circle and the click-two-points Measure are 3D-scene tools;
-// hide them in atlas mode (Aladin owns zoom/framing there). Share stays — it's atlas-aware.
-toolsRow
-  .querySelectorAll('#return-earth, #toggle-fov, #toggle-measure')
-  .forEach((b) => b.classList.add('space-only'));
+// FOV-framing circle and Measure now work in atlas mode too (Aladin overlays); only "Return to
+// Earth" is a 3D-scene concept, so it alone is hidden in atlas. Share stays — it's atlas-aware.
+toolsRow.querySelector('#return-earth')!.classList.add('space-only');
 document.getElementById('sec-tools')!.appendChild(toolsRow);
 
 // angular-separation measurement: two sky clicks → great-circle distance + a drawn arc
@@ -443,6 +441,7 @@ let measureLine: THREE.Line | null = null;
 const measureBtn = document.getElementById('toggle-measure') as HTMLButtonElement;
 const clearMeasure = (): void => {
   measureA = null;
+  atlas?.removeLines('measure'); // drop the atlas arc too
   if (measureLine) {
     scene.remove(measureLine);
     measureLine.geometry.dispose();
@@ -455,6 +454,24 @@ measureBtn.addEventListener('click', () => {
   measureBtn.textContent = measureMode ? '📐 click 1st point' : '📐 Measure';
   clearMeasure();
 });
+/** Great-circle arc between two sky points as [raDeg,decDeg] vertices (for the atlas measure line). */
+function greatCircleRaDec(ra1: number, dec1: number, ra2: number, dec2: number): number[][] {
+  const toV = (ra: number, dec: number): [number, number, number] => {
+    const r = ra * DEG2RAD, d = dec * DEG2RAD, cd = Math.cos(d);
+    return [cd * Math.cos(r), cd * Math.sin(r), Math.sin(d)];
+  };
+  const a = toV(ra1, dec1), b = toV(ra2, dec2);
+  const steps = Math.max(16, Math.ceil(angularSepDeg(ra1, dec1, ra2, dec2) * 2));
+  const pts: number[][] = [];
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    let x = a[0] + (b[0] - a[0]) * t, y = a[1] + (b[1] - a[1]) * t, z = a[2] + (b[2] - a[2]) * t;
+    const n = Math.hypot(x, y, z) || 1;
+    x /= n; y /= n; z /= n;
+    pts.push([Math.atan2(y, x) * RAD2DEG, Math.asin(Math.max(-1, Math.min(1, z))) * RAD2DEG]);
+  }
+  return pts;
+}
 function handleMeasureClick(raDeg: number, decDeg: number): void {
   if (!measureA) {
     measureA = { ra: raDeg, dec: decDeg };
@@ -467,7 +484,13 @@ function handleMeasureClick(raDeg: number, decDeg: number): void {
     sep >= 1 ? `${sep.toFixed(3)}°` : sep >= 1 / 60 ? `${(sep * 60).toFixed(2)}′` : `${(sep * 3600).toFixed(1)}″`;
   clearMeasure();
   measureBtn.textContent = `📐 ${sepTxt} (tap to clear)`;
-  // draw the great-circle arc between the two points
+  if (viewMode === 'atlas') {
+    // draw the great-circle arc as an Aladin polyline
+    atlas?.setLines('measure', 'rgb(255,210,122)', 1.6, [greatCircleRaDec(A.ra, A.dec, raDeg, decDeg)]);
+    measureA = { ra: raDeg, dec: decDeg }; // chain from the last point
+    return;
+  }
+  // draw the great-circle arc between the two points (3D scene)
   const a = new THREE.Vector3(), b = new THREE.Vector3(), p = new THREE.Vector3();
   raDecToWorld(A.ra * DEG2RAD, A.dec * DEG2RAD, a);
   raDecToWorld(raDeg * DEG2RAD, decDeg * DEG2RAD, b);
@@ -511,6 +534,7 @@ document.getElementById('toggle-fov')!.addEventListener('click', () => {
   const btn = document.getElementById('toggle-fov')!;
   btn.classList.toggle('active', fovIdx >= 0);
   btn.textContent = fovIdx < 0 ? '⊕ FOV' : `⊕ ${fovPresets[fovIdx]!.label}`;
+  if (viewMode === 'atlas') atlas?.setFovCircle(fovIdx < 0 ? null : fovPresets[fovIdx]!.deg);
 });
 (document.getElementById('exposure') as HTMLInputElement).addEventListener('input', (e) => {
   const stops = parseFloat((e.target as HTMLInputElement).value);
@@ -643,6 +667,10 @@ atlas = new AtlasView(
   '#aladin',
   currentSurvey,
   (raDeg, decDeg, data) => {
+    if (measureMode) {
+      handleMeasureClick(raDeg, decDeg); // measuring: every click is a measure point, not an identify
+      return;
+    }
     // route by source kind (same precedence as the 3D raycast): solar body → transient → SIMBAD
     const bodyId = typeof data?.body === 'string' ? data.body : null;
     if (bodyId) {
@@ -714,13 +742,20 @@ function onAtlasViewChange(): void {
   if (viewMode !== 'atlas') return;
   for (const p of activeCatalogs.values()) void fetchCatalogNearView(p);
   if (transientsOn) void fetchTransientsNearView();
+  atlas?.refreshFovCircle(); // keep the framing circle centred as you pan/zoom
 }
 
 // --- Solar system on the atlas (Sun, Moon, planets at the sim-clock instant) ---
 const SOLAR_IDS = ['sun', 'moon', 'mercury', 'venus', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune'];
+// planets get a faint apparent-motion "orbit trail" (shows prograde/retrograde loops); the Sun's
+// path is just the ecliptic overlay and the Moon moves too fast for a multi-week trail.
+const TRAIL_IDS = ['mercury', 'venus', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune'];
+const rgbaFor = (hex: number, a: number): string =>
+  `rgba(${(hex >> 16) & 255},${(hex >> 8) & 255},${hex & 255},${a})`;
 /** Plot each body at its current ephemeris position; clicking one opens its panel (data.body=id). */
 function pushSolarToAtlas(): void {
-  for (const b of solarSystemAt(getSimMs())) {
+  const now = getSimMs();
+  for (const b of solarSystemAt(now)) {
     const big = b.id === 'sun' || b.id === 'moon';
     atlas?.setLayer(
       `solar:${b.id}`,
@@ -729,9 +764,18 @@ function pushSolarToAtlas(): void {
       { labels: true, size: big ? 16 : 11 },
     );
   }
+  for (const id of TRAIL_IDS) {
+    const pts: number[][] = [];
+    for (let d = -15; d <= 25; d += 2) {
+      const p = bodyRaDecAt(id, now + d * 86400000);
+      if (p) pts.push([p.raDeg, p.decDeg]);
+    }
+    atlas?.setLines(`trail:${id}`, rgbaFor(BODY_COLOR[id] ?? 0xffffff, 0.45), 1, [pts]);
+  }
 }
 function removeSolarFromAtlas(): void {
   for (const id of SOLAR_IDS) atlas?.removeLayer(`solar:${id}`);
+  for (const id of TRAIL_IDS) atlas?.removeLines(`trail:${id}`);
 }
 
 // The atlas has no per-frame render loop (the 3D loop early-returns), so a light 1 Hz tick advances
@@ -1466,6 +1510,8 @@ function setViewMode(m: 'atlas' | 'space'): void {
     if (solarOn) pushSolarToAtlas();
     for (const p of activeCatalogs.values()) void fetchCatalogNearView(p);
     if (transientsOn) pushTransientsToAtlas();
+    atlas?.setExposure(skyStops);
+    atlas?.setFovCircle(fovIdx < 0 ? null : fovPresets[fovIdx]!.deg);
   }
   if (m === 'atlas') startAtlasTick();
   else stopAtlasTick();

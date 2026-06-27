@@ -110,6 +110,17 @@ export const BODY_COLOR: Record<string, number> = Object.fromEntries(
   Object.entries(BODY_META).map(([k, v]) => [k, v.color]),
 );
 
+/**
+ * Lightweight geocentric J2000 RA/Dec for one body at an instant — positions only (no illumination
+ * or distance), so it's cheap enough to call many times for drawing apparent-motion (orbit) trails.
+ */
+export function bodyRaDecAt(id: string, unixMs: number): { raDeg: number; decDeg: number } | null {
+  const meta = BODY_META[id];
+  if (!meta) return null;
+  const eq = Astronomy.EquatorFromVector(Astronomy.GeoVector(meta.body, new Date(unixMs), true));
+  return { raDeg: ((eq.ra * 15) % 360 + 360) % 360, decDeg: eq.dec };
+}
+
 /** Angular separation between two RA/Dec points (degrees). */
 export function angularSepDeg(ra1: number, dec1: number, ra2: number, dec2: number): number {
   const DEG = Math.PI / 180;
