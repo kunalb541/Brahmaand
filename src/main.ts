@@ -14,6 +14,7 @@ import {
   createGalacticEquator,
   createPrecessionCircles,
   buildHorizonGrid,
+  galacticToRaDec,
 } from './sky/grids';
 import { MessierLayer } from './sky/messier';
 import { SolarSystemLayer } from './sky/solarSystem';
@@ -22,7 +23,7 @@ import { getObserver, setObserver, acquireObserver, horizontalToEquatorial } fro
 import { Horizon } from './sky/horizon';
 import { HrDiagram } from './ui/hrDiagram';
 import { getSimMs, getRate, setRate, setSimMs, resetToNow, isLive } from './core/simTime';
-import { StarLabels } from './sky/starLabels';
+import { StarLabels, STARS } from './sky/starLabels';
 import { StarField } from './stars/starField';
 import { TransientLayer } from './sky/transientLayer';
 import {
@@ -189,7 +190,19 @@ toggleConst.addEventListener('click', () => {
 const toggleStars = document.getElementById('toggle-stars') as HTMLButtonElement;
 toggleStars.addEventListener('click', () => {
   starLabelsOn = toggleStars.classList.toggle('active');
+  if (viewMode === 'atlas') applyAtlasStars();
 });
+/** Bright-star name labels on the atlas (Aladin labelled catalogue). */
+function applyAtlasStars(): void {
+  if (starLabelsOn)
+    atlas?.setLayer(
+      'stars',
+      'rgb(216,228,255)',
+      STARS.map((s) => ({ raDeg: s.ra, decDeg: s.dec, label: s.name })),
+      { labels: true, size: 5 },
+    );
+  else atlas?.removeLayer('stars');
+}
 
 // reference grids & lines (Stellarium-style) — accurate great/small circles on the sphere
 const equGrid = createEquatorialGrid();
@@ -201,11 +214,65 @@ const gridGroup = new THREE.Group();
 gridGroup.add(equGrid, equator, ecliptic, galactic, precession);
 scene.add(gridGroup);
 const gridOn = { equ: false, ecl: false, gal: false, hor: false };
+
+// Atlas grids are drawn as Aladin polylines (great circles), recomputed from the same math the 3D
+// grids use, so they sit exactly on the imagery. Equatorial uses Aladin's native coordinate grid.
+const ECL_EPS = 23.4393 * DEG2RAD;
+function eclipticLines(): number[][][] {
+  const main: number[][] = [];
+  for (let d = 0; d <= 360; d += 2) {
+    const lon = d * DEG2RAD;
+    const dec = Math.asin(Math.sin(ECL_EPS) * Math.sin(lon));
+    const ra = Math.atan2(Math.cos(ECL_EPS) * Math.sin(lon), Math.cos(lon));
+    main.push([ra * RAD2DEG, dec * RAD2DEG]);
+  }
+  return [main];
+}
+function galacticLines(): number[][][] {
+  const main: number[][] = [];
+  for (let d = 0; d <= 360; d += 2) {
+    const [ra, dec] = galacticToRaDec(d, 0);
+    main.push([ra * RAD2DEG, dec * RAD2DEG]);
+  }
+  return [main];
+}
+function horizonLines(): number[][][] {
+  const obs = getObserver();
+  if (!obs) return [];
+  const t = getSimMs();
+  const toEq = (alt: number, az: number) => horizontalToEquatorial(alt, az, obs, t);
+  const lines: number[][][] = [];
+  for (const alt of [0, 20, 40, 60, 80]) {
+    const ln: number[][] = [];
+    for (let az = 0; az <= 360; az += alt === 0 ? 2 : 4) {
+      const e = toEq(alt, az);
+      ln.push([e.raDeg, e.decDeg]);
+    }
+    lines.push(ln);
+  }
+  for (let az = 0; az < 360; az += 30) {
+    const ln: number[][] = [];
+    for (let alt = 0; alt <= 88; alt += 4) {
+      const e = toEq(alt, az);
+      ln.push([e.raDeg, e.decDeg]);
+    }
+    lines.push(ln);
+  }
+  return lines;
+}
+/** Mirror a reference-grid toggle onto the atlas (Aladin). */
+function applyAtlasGrid(key: keyof typeof gridOn): void {
+  if (key === 'equ') atlas?.setGrid(gridOn.equ);
+  else if (key === 'ecl') gridOn.ecl ? atlas?.setLines('ecl', 'rgb(230,184,92)', 1.2, eclipticLines()) : atlas?.removeLines('ecl');
+  else if (key === 'gal') gridOn.gal ? atlas?.setLines('gal', 'rgb(143,127,208)', 1.2, galacticLines()) : atlas?.removeLines('gal');
+  else if (key === 'hor') gridOn.hor && getObserver() ? atlas?.setLines('hor', 'rgb(79,159,127)', 1, horizonLines()) : atlas?.removeLines('hor');
+}
+
 const wireGrid = (id: string, key: keyof typeof gridOn) => {
   const btn = document.getElementById(id) as HTMLButtonElement;
   btn.addEventListener('click', () => {
     gridOn[key] = btn.classList.toggle('active');
-    if (key === 'equ') atlas?.setGrid(gridOn.equ); // atlas mode uses Aladin's native coordinate grid
+    if (viewMode === 'atlas') applyAtlasGrid(key);
   });
 };
 wireGrid('toggle-grid', 'equ');
@@ -226,6 +293,7 @@ horizonBtn.addEventListener('click', () => {
     // no location yet → let the user set one so the ground is in the right place
     promptManualLocation();
   }
+  if (viewMode === 'atlas') applyAtlasGrid('hor');
 });
 function refreshHorizonGrid(): void {
   const obs = getObserver();
@@ -1326,7 +1394,11 @@ function setViewMode(m: 'atlas' | 'space'): void {
     void atlas?.setConstellations(constellationsOn);
     void atlas?.setBoundaries(boundariesOn);
     void atlas?.setMessier(messierOn);
-    atlas?.setGrid(gridOn.equ);
+    applyAtlasGrid('equ');
+    applyAtlasGrid('ecl');
+    applyAtlasGrid('gal');
+    applyAtlasGrid('hor');
+    applyAtlasStars();
     for (const p of activeCatalogs.values()) void fetchCatalogNearView(p);
     if (transientsOn) pushTransientsToAtlas();
   }

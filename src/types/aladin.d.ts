@@ -31,6 +31,7 @@ interface AladinCatalog {
 interface AladinOverlay {
   add(shape: unknown): void;
   addFootprints(shapes: unknown[]): void;
+  removeAll?(): void;
   show?(): void;
   hide?(): void;
 }

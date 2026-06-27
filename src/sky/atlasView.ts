@@ -54,6 +54,9 @@ export class AtlasView {
   // Aladin catalogue per id, updated in place (clear + addSources). Buffered until the engine is up.
   private layers = new Map<string, AladinCatalog>();
   private pendingLayers = new Map<string, { color: string; points: MarkerPoint[]; opts?: LayerOpts }>();
+  // generic polyline layers (ecliptic / galactic / horizon grids): one graphic overlay per id.
+  private lineLayers = new Map<string, AladinOverlay>();
+  private pendingLines = new Map<string, { color: string; lineWidth: number; lines: number[][][] }>();
   private viewTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
@@ -93,6 +96,8 @@ export class AtlasView {
         if (this.want.messier) void this.setMessier(true);
         for (const [id, l] of this.pendingLayers) this.setLayer(id, l.color, l.points, l.opts);
         this.pendingLayers.clear();
+        for (const [id, l] of this.pendingLines) this.setLines(id, l.color, l.lineWidth, l.lines);
+        this.pendingLines.clear();
         if (this.pendingGoto) this.goto(...this.pendingGoto);
       })
       .catch((e) => console.warn('[atlas] Aladin Lite failed to init', e));
@@ -207,6 +212,37 @@ export class AtlasView {
   /** Show/hide a marker layer without dropping it (e.g. transient legend group filters). */
   hideLayer(id: string, hidden: boolean): void {
     toggle(this.layers.get(id), !hidden);
+  }
+
+  /** Create or replace a polyline layer (ecliptic / galactic / horizon grids). `lines` are arrays
+   *  of [raDeg, decDeg] vertices. Re-callable to refresh (e.g. the horizon as time/location change). */
+  setLines(id: string, color: string, lineWidth: number, lines: number[][][]): void {
+    if (!this.al) {
+      this.pendingLines.set(id, { color, lineWidth, lines });
+      return;
+    }
+    let ov = this.lineLayers.get(id);
+    if (!ov) {
+      ov = A.graphicOverlay({ color, lineWidth });
+      this.al.addOverlay(ov);
+      this.lineLayers.set(id, ov);
+    } else {
+      ov.removeAll?.();
+      ov.show?.();
+    }
+    for (const line of lines) if (line.length > 1) ov.add(A.polyline(line));
+  }
+
+  removeLines(id: string): void {
+    this.pendingLines.delete(id);
+    const ov = this.lineLayers.get(id);
+    if (!ov) return;
+    try {
+      this.al?.removeLayer(ov);
+    } catch {
+      ov.hide?.();
+    }
+    this.lineLayers.delete(id);
   }
 
   /** Constellation stick-figures, drawn from the same GeoJSON the 3D scene uses. */

@@ -85,8 +85,8 @@ export function createEcliptic(): THREE.LineSegments {
   return lineSegs(pos, 0xe6b85c, 0.75); // gold — the Sun/planet road
 }
 
-// J2000 Galactic → ICRS rotation (transpose of the IAU A_G matrix).
-function galacticToRaDec(lDeg: number, bDeg: number): [number, number] {
+// J2000 Galactic → ICRS rotation (transpose of the IAU A_G matrix). Returns [raRad, decRad].
+export function galacticToRaDec(lDeg: number, bDeg: number): [number, number] {
   const l = lDeg * DEG2RAD, b = bDeg * DEG2RAD;
   const xg = Math.cos(b) * Math.cos(l), yg = Math.cos(b) * Math.sin(l), zg = Math.sin(b);
   const xe = -0.0548755604 * xg + 0.4941094279 * yg - 0.867666149 * zg;

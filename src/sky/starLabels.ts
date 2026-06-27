@@ -2,8 +2,8 @@ import * as THREE from 'three';
 import { DEG2RAD } from '../math/angles';
 import { raDecToWorld } from '../math/frames';
 
-/** A few naked-eye landmarks (ICRS J2000, degrees). Doubles as an alignment check. */
-const STARS: { name: string; ra: number; dec: number }[] = [
+/** A few naked-eye landmarks (ICRS J2000, degrees). Doubles as an alignment check + atlas labels. */
+export const STARS: { name: string; ra: number; dec: number }[] = [
   { name: 'Sirius', ra: 101.287, dec: -16.716 },
   { name: 'Canopus', ra: 95.988, dec: -52.696 },
   { name: 'Betelgeuse', ra: 88.793, dec: 7.407 },
