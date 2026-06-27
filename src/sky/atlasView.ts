@@ -24,10 +24,24 @@ function toggle(layer: { show?(): void; hide?(): void } | undefined, on: boolean
   else layer.hide?.();
 }
 
+/** A point in a marker layer: ICRS degrees, an optional label and per-source data (read on click). */
+export interface MarkerPoint {
+  raDeg: number;
+  decDeg: number;
+  label?: string;
+  data?: Record<string, unknown>;
+}
+interface LayerOpts {
+  size?: number;
+  shape?: string;
+  labels?: boolean;
+}
+
 export class AtlasView {
   private al: AladinInstance | null = null;
   ready = false;
-  private onIdentify: (raDeg: number, decDeg: number) => void;
+  private onPick: (raDeg: number, decDeg: number, data?: Record<string, unknown>) => void;
+  private onView: (() => void) | undefined;
   // state applied once the WASM engine has initialised
   private pendingSurvey: SurveyEntry;
   private pendingGoto: [number, number, number] | null = null;
@@ -36,9 +50,20 @@ export class AtlasView {
   // wanted on/off state, re-applied once the engine is ready.
   private overlays: { const?: AladinOverlay; bounds?: AladinOverlay; messier?: AladinCatalog } = {};
   private want = { const: false, bounds: false, messier: false };
+  // generic marker layers (VizieR catalogues, transient groups, star labels, solar bodies): one
+  // Aladin catalogue per id, updated in place (clear + addSources). Buffered until the engine is up.
+  private layers = new Map<string, AladinCatalog>();
+  private pendingLayers = new Map<string, { color: string; points: MarkerPoint[]; opts?: LayerOpts }>();
+  private viewTimer: ReturnType<typeof setTimeout> | null = null;
 
-  constructor(container: string, initial: SurveyEntry, onIdentify: (raDeg: number, decDeg: number) => void) {
-    this.onIdentify = onIdentify;
+  constructor(
+    container: string,
+    initial: SurveyEntry,
+    onPick: (raDeg: number, decDeg: number, data?: Record<string, unknown>) => void,
+    onView?: () => void,
+  ) {
+    this.onPick = onPick;
+    this.onView = onView;
     this.pendingSurvey = initial;
     A.init
       .then(() => {
@@ -60,11 +85,14 @@ export class AtlasView {
         });
         this.ready = true;
         this.wireClicks();
+        this.wireView();
         this.setSurvey(this.pendingSurvey); // apply the latest requested survey (+ any field-survey fly)
         if (this.gridOn) this.setGrid(true);
         if (this.want.const) void this.setConstellations(true);
         if (this.want.bounds) void this.setBoundaries(true);
         if (this.want.messier) void this.setMessier(true);
+        for (const [id, l] of this.pendingLayers) this.setLayer(id, l.color, l.points, l.opts);
+        this.pendingLayers.clear();
         if (this.pendingGoto) this.goto(...this.pendingGoto);
       })
       .catch((e) => console.warn('[atlas] Aladin Lite failed to init', e));
@@ -72,18 +100,31 @@ export class AtlasView {
 
   private wireClicks(): void {
     const al = this.al!;
-    // a catalogue source / marker (e.g. Messier) was clicked
+    // a catalogue source / marker (Messier, a VizieR source, a transient…) was clicked. Its `data`
+    // (set in setLayer) lets the app route the click — e.g. a transient oid opens its light curve.
     al.on('objectClicked', (o: unknown) => {
-      const s = o as { ra?: number; dec?: number } | null;
-      if (s && typeof s.ra === 'number' && typeof s.dec === 'number') this.onIdentify(s.ra, s.dec);
+      const s = o as { ra?: number; dec?: number; data?: Record<string, unknown> } | null;
+      if (s && typeof s.ra === 'number' && typeof s.dec === 'number') this.onPick(s.ra, s.dec, s.data);
     });
     // empty-sky click → identify what's at that pixel
     al.on('click', (e: unknown) => {
       const me = e as { offsetX?: number; offsetY?: number } | null;
       if (!me || me.offsetX == null || me.offsetY == null) return;
       const rd = al.pix2world(me.offsetX, me.offsetY);
-      if (rd) this.onIdentify(rd[0], rd[1]);
+      if (rd) this.onPick(rd[0], rd[1]);
     });
+  }
+
+  /** Notify the app (debounced) when the user pans/zooms, so view-scoped layers can re-query. */
+  private wireView(): void {
+    const al = this.al!;
+    const fire = (): void => {
+      if (!this.onView) return;
+      if (this.viewTimer) clearTimeout(this.viewTimer);
+      this.viewTimer = setTimeout(() => this.onView?.(), 350);
+    };
+    al.on('positionChanged', fire);
+    al.on('zoomChanged', fire);
   }
 
   /** Swap the displayed survey and, for the showcase field surveys, fly to their target. */
@@ -115,6 +156,57 @@ export class AtlasView {
   setGrid(on: boolean): void {
     this.gridOn = on;
     this.al?.setCooGrid({ enabled: on, color: 'rgb(120,160,220)', opacity: 0.5 });
+  }
+
+  /**
+   * Create or update a marker layer (one Aladin catalogue per id). Re-callable to refresh contents
+   * in place. Sources carry optional per-source `data` (read back on click) and `label`.
+   */
+  setLayer(id: string, color: string, points: MarkerPoint[], opts?: LayerOpts): void {
+    if (!this.al) {
+      this.pendingLayers.set(id, { color, points, opts });
+      return;
+    }
+    let cat = this.layers.get(id);
+    if (!cat) {
+      cat = A.catalog({
+        name: id,
+        color,
+        sourceSize: opts?.size ?? 9,
+        shape: opts?.shape ?? 'circle',
+        displayLabel: !!opts?.labels,
+        labelColumn: 'label',
+        labelColor: color,
+        labelFont: '11px sans-serif',
+      });
+      this.al.addCatalog(cat);
+      this.layers.set(id, cat);
+    } else {
+      cat.clear?.();
+      cat.setColor?.(color);
+      cat.show?.();
+    }
+    cat.addSources(
+      points.map((p) => A.source(p.raDeg, p.decDeg, { ...(p.data ?? {}), label: p.label ?? '' })),
+    );
+  }
+
+  /** Remove a marker layer entirely (toggled off). */
+  removeLayer(id: string): void {
+    this.pendingLayers.delete(id);
+    const cat = this.layers.get(id);
+    if (!cat) return;
+    try {
+      this.al?.removeLayer(cat);
+    } catch {
+      cat.hide?.();
+    }
+    this.layers.delete(id);
+  }
+
+  /** Show/hide a marker layer without dropping it (e.g. transient legend group filters). */
+  hideLayer(id: string, hidden: boolean): void {
+    toggle(this.layers.get(id), !hidden);
   }
 
   /** Constellation stick-figures, drawn from the same GeoJSON the 3D scene uses. */

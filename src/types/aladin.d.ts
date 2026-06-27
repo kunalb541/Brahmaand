@@ -15,12 +15,16 @@ interface AladinInstance {
   showHealpixGrid(show: boolean): void;
   addCatalog(catalog: unknown): void;
   addOverlay(overlay: unknown): void;
+  removeLayer(layer: unknown): void;
   removeLayers(): void;
+  setFrame(frame: string): void;
   on(event: string, callback: (...args: unknown[]) => void): void;
 }
 
 interface AladinCatalog {
   addSources(sources: unknown[]): void;
+  clear?(): void;
+  setColor?(color: string): void;
   show?(): void;
   hide?(): void;
 }

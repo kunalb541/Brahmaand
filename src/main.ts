@@ -562,10 +562,20 @@ const objectPanel = new ObjectPanel({
   getFovDeg: () => (viewMode === 'atlas' ? atlas?.getView()?.fovDeg ?? controls.fovDeg : controls.fovDeg),
 });
 
-// Aladin Lite atlas view: clicks (empty sky or a catalogue marker) feed the existing object panel.
-atlas = new AtlasView('#aladin', currentSurvey, (raDeg, decDeg) => {
-  void objectPanel.identifyAt(raDeg, decDeg);
-});
+// Aladin Lite atlas view. Clicks route by source: a transient marker (carries its oid) opens its
+// light curve; everything else (empty sky, a catalogue/Messier marker) → SIMBAD identify. Panning
+// the atlas re-queries the view-scoped layers (catalogs / transients).
+atlas = new AtlasView(
+  '#aladin',
+  currentSurvey,
+  (raDeg, decDeg, data) => {
+    const oid = typeof data?.oid === 'string' ? data.oid : null;
+    const t = oid ? transientMap.get(oid) : undefined;
+    if (t) void objectPanel.showTransient(t);
+    else void objectPanel.identifyAt(raDeg, decDeg);
+  },
+  () => onAtlasViewChange(),
+);
 
 // Messier deep-sky labels (SIMBAD positions) — click a label to fly + inspect
 const messier = new MessierLayer(camera, (raDeg, decDeg) => {
@@ -580,10 +590,49 @@ const transientMap = new Map<string, Transient>();
 let transientsOn = false;
 const lastFetchDir = new THREE.Vector3(2, 0, 0);
 const viewDir = new THREE.Vector3();
-const tonightRd = { raRad: 0, decRad: 0 };
+
+// --- View-scoped layers (VizieR catalogs + transients), shared between atlas and 3D modes ---
+const _vcRd = { raRad: 0, decRad: 0 };
+/** Current view centre + a sensible cone-query radius, for whichever mode is active. */
+function viewCenter(): { raDeg: number; decDeg: number; radiusDeg: number } {
+  if (viewMode === 'atlas') {
+    const v = atlas?.getView();
+    if (v) return { raDeg: v.raDeg, decDeg: v.decDeg, radiusDeg: Math.min(Math.max(v.fovDeg / 1.5, 0.05), 8) };
+  }
+  camera.getWorldDirection(viewDir);
+  worldToRaDec(viewDir, _vcRd);
+  return {
+    raDeg: _vcRd.raRad * RAD2DEG,
+    decDeg: _vcRd.decRad * RAD2DEG,
+    radiusDeg: Math.min(Math.max(controls.fovDeg / 1.5, 0.05), 1.0),
+  };
+}
+const hexCss = (n: number): string => '#' + n.toString(16).padStart(6, '0');
+const groupCss = (g: TransientGroup): string => {
+  const [r, gg, b] = GROUP_COLOR[g];
+  return `rgb(${Math.round(r * 255)},${Math.round(gg * 255)},${Math.round(b * 255)})`;
+};
+/** Push the current transients into the atlas as per-group, colour-coded Aladin catalogues. */
+function pushTransientsToAtlas(): void {
+  const all = [...transientMap.values()];
+  for (const g of GROUP_LIST) {
+    const pts = all
+      .filter((t) => classGroup(t.cls) === g)
+      .map((t) => ({ raDeg: t.raDeg, decDeg: t.decDeg, data: { oid: t.oid } }));
+    atlas?.setLayer(`trans:${g}`, groupCss(g), pts, { size: 11 });
+    atlas?.hideLayer(`trans:${g}`, hiddenGroups.has(g));
+  }
+}
+/** Aladin pan/zoom (debounced) → re-query the view-scoped layers near the new centre. */
+function onAtlasViewChange(): void {
+  if (viewMode !== 'atlas') return;
+  for (const p of activeCatalogs.values()) void fetchCatalogNearView(p);
+  if (transientsOn) void fetchTransientsNearView();
+}
 
 function applyTransients(): void {
   transientLayer.setTransients([...transientMap.values()], Date.now());
+  if (viewMode === 'atlas') pushTransientsToAtlas();
   refreshLegend();
 }
 async function loadTonightSnapshot(): Promise<void> {
@@ -592,11 +641,11 @@ async function loadTonightSnapshot(): Promise<void> {
 }
 let lastAlertUpdate = 0;
 async function fetchTransientsNearView(): Promise<void> {
-  camera.getWorldDirection(viewDir);
-  worldToRaDec(viewDir, tonightRd);
+  const c = viewCenter();
+  const radius = viewMode === 'atlas' ? Math.min(Math.max(c.radiusDeg, 1), 12) : 8;
   try {
     const before = transientMap.size;
-    const near = await fetchNear(tonightRd.raRad * RAD2DEG, tonightRd.decRad * RAD2DEG, 8);
+    const near = await fetchNear(c.raDeg, c.decDeg, radius);
     for (const t of near) transientMap.set(t.oid, t);
     lastAlertUpdate = Date.now();
     if (transientMap.size !== before || near.length) applyTransients();
@@ -749,6 +798,7 @@ const legendRows = new Map<TransientGroup, { row: HTMLDivElement; count: HTMLSpa
       else hiddenGroups.add(g);
       row.style.opacity = hiddenGroups.has(g) ? '0.35' : '1';
       transientLayer.setHiddenGroups(hiddenGroups);
+      atlas?.hideLayer(`trans:${g}`, hiddenGroups.has(g)); // mirror the filter onto the atlas
       renderFeed();
     });
     legend.appendChild(row);
@@ -807,15 +857,22 @@ renderFeed();
 const catalogOverlay = new CatalogOverlay(scene);
 const activeCatalogs = new Map<string, CatalogPreset>();
 const lastCatFetchDir = new THREE.Vector3(2, 0, 0);
-const catRd = { raRad: 0, decRad: 0 };
 
 async function fetchCatalogNearView(preset: CatalogPreset): Promise<void> {
-  camera.getWorldDirection(viewDir);
-  worldToRaDec(viewDir, catRd);
-  const radius = Math.min(Math.max(controls.fovDeg / 1.5, 0.05), 1.0);
+  const c = viewCenter();
   try {
-    const src = await fetchCatalog(preset, catRd.raRad * RAD2DEG, catRd.decRad * RAD2DEG, radius);
-    if (activeCatalogs.has(preset.id)) catalogOverlay.setCatalog(preset.id, preset.name, preset.color, src);
+    const src = await fetchCatalog(preset, c.raDeg, c.decDeg, c.radiusDeg);
+    if (!activeCatalogs.has(preset.id)) return;
+    if (viewMode === 'atlas') {
+      atlas?.setLayer(
+        `cat:${preset.id}`,
+        hexCss(preset.color),
+        src.map((s) => ({ raDeg: s.raDeg, decDeg: s.decDeg })),
+        { size: 7 },
+      );
+    } else {
+      catalogOverlay.setCatalog(preset.id, preset.name, preset.color, src);
+    }
   } catch (e) {
     console.warn(`catalog ${preset.id} fetch failed`, e);
   }
@@ -834,11 +891,12 @@ for (const preset of CATALOGS) {
     if (activeCatalogs.has(preset.id)) {
       activeCatalogs.delete(preset.id);
       catalogOverlay.remove(preset.id);
+      atlas?.removeLayer(`cat:${preset.id}`);
       b.classList.remove('active');
     } else {
       activeCatalogs.set(preset.id, preset);
       b.classList.add('active');
-      fly.reset();
+      if (viewMode === 'space') fly.reset(); // 3D: drop back to Earth so the field frames; atlas stays put
       void fetchCatalogNearView(preset);
     }
   });
@@ -1263,12 +1321,14 @@ function setViewMode(m: 'atlas' | 'space'): void {
     atlas?.setSurvey(currentSurvey);
     atlas?.goto(handoffRd.raRad * RAD2DEG, handoffRd.decRad * RAD2DEG, Math.min(controls.fovDeg, 60));
   }
-  // entering atlas: mirror the current overlay-toggle state onto Aladin
+  // entering atlas: mirror the current overlay-toggle + data-layer state onto Aladin
   if (m === 'atlas') {
     void atlas?.setConstellations(constellationsOn);
     void atlas?.setBoundaries(boundariesOn);
     void atlas?.setMessier(messierOn);
     atlas?.setGrid(gridOn.equ);
+    for (const p of activeCatalogs.values()) void fetchCatalogNearView(p);
+    if (transientsOn) pushTransientsToAtlas();
   }
   // Three.js DOM overlays (star labels, Messier labels) only make sense in 3D mode
   starLabels.setVisible(m === 'space' && starLabelsOn);

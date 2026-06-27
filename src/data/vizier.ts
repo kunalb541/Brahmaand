@@ -48,15 +48,20 @@ export async function fetchCatalog(
   signal?: AbortSignal,
   limit = 1500,
 ): Promise<CatalogSource[]> {
-  const r = Math.min(radiusDeg, 1.0);
+  const r = Math.min(radiusDeg, 5.0);
   const key = `${preset.id}:${raDeg.toFixed(3)}:${decDeg.toFixed(3)}:${r.toFixed(3)}`;
   const hit = cache.get(key);
   if (hit) return hit;
 
   const cols = `${preset.ra},${preset.dec}${preset.mag ? ',' + preset.mag : ''}`;
+  // Order by magnitude (brightest first) so the TOP-N cap returns the brightest sources spread
+  // across the cone — not an arbitrary, spatially-clustered slice of the table (which over a wide
+  // field looked like a tight blob). Chandra has no magnitude column, so it stays unordered.
+  const order = preset.mag ? ` ORDER BY ${preset.mag} ASC` : '';
   const adql =
     `SELECT TOP ${limit} ${cols} FROM "${preset.table}" ` +
-    `WHERE 1=CONTAINS(POINT('ICRS',${preset.ra},${preset.dec}),CIRCLE('ICRS',${raDeg},${decDeg},${r}))`;
+    `WHERE 1=CONTAINS(POINT('ICRS',${preset.ra},${preset.dec}),CIRCLE('ICRS',${raDeg},${decDeg},${r}))` +
+    order;
   await acquire(signal);
   const body = new URLSearchParams({ REQUEST: 'doQuery', LANG: 'ADQL', FORMAT: 'json', QUERY: adql });
   const resp = await fetch(VIZIER_TAP, { method: 'POST', body, ...(signal ? { signal } : {}) });
