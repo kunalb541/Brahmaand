@@ -10,6 +10,7 @@ import {
   type ConeHit,
   type ObjectDetail,
 } from '../data/cds';
+import { searchSuggest, type Suggestion } from '../data/searchIndex';
 const XMATCH_RADIUS_ARCSEC = 20;
 import {
   fetchLightcurve,
@@ -58,6 +59,9 @@ const CUTOUT_HIPS = 'CDS/P/DSS2/color';
 export class ObjectPanel {
   private panel: HTMLDivElement;
   private input: HTMLInputElement;
+  private suggestBox!: HTMLDivElement;
+  private suggestions: Suggestion[] = [];
+  private highlight = -1;
   private abort: AbortController | null = null;
   // Lomb–Scargle is expensive — memoise per transient so rerenders (e.g. on a location change) reuse it
   private lsCache: { oid: string; res: LSResult | null } | null = null;
@@ -68,10 +72,34 @@ export class ObjectPanel {
     // search input — lives in the TOP BAR's dedicated slot (an app-frame region, so it can
     // never overlap any other control at any width)
     const slot = document.getElementById('search-slot')!;
-    slot.innerHTML = '<input id="obj-search" type="search" placeholder="Search: M31, Sirius, NGC 6543…">';
+    slot.innerHTML =
+      '<input id="obj-search" type="search" autocomplete="off" placeholder="Search: M31, Sirius, NGC 6543…">';
     this.input = slot.querySelector('input')!;
-    this.input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') void this.onSearch(this.input.value);
+    // live autocomplete dropdown (recommendations while typing). Body-level + position:fixed so it
+    // always stacks above the Aladin / 3D canvases (which sit in their own stacking contexts).
+    this.suggestBox = document.createElement('div');
+    this.suggestBox.id = 'search-suggest';
+    this.suggestBox.style.cssText =
+      'position:fixed;z-index:9999;display:none;max-height:300px;overflow-y:auto;' +
+      'background:rgba(8,14,28,0.97);border:1px solid rgba(120,170,255,0.25);' +
+      'border-radius:10px;box-shadow:0 8px 30px rgba(0,0,0,0.5)';
+    document.body.appendChild(this.suggestBox);
+    this.input.addEventListener('input', () => this.updateSuggest());
+    this.input.addEventListener('keydown', (e) => this.onSearchKey(e));
+    this.input.addEventListener('focus', () => {
+      if (this.input.value.trim()) this.updateSuggest();
+    });
+    this.input.addEventListener('blur', () => setTimeout(() => this.hideSuggest(), 150));
+    // mousedown (before the input blur) so a click on a row selects it
+    this.suggestBox.addEventListener('mousedown', (e) => {
+      const row = (e.target as HTMLElement).closest('[data-i]') as HTMLElement | null;
+      if (!row) return;
+      e.preventDefault();
+      this.pickSuggest(Number(row.dataset.i));
+    });
+    this.suggestBox.addEventListener('mousemove', (e) => {
+      const row = (e.target as HTMLElement).closest('[data-i]') as HTMLElement | null;
+      if (row) this.setHighlight(Number(row.dataset.i));
     });
 
     // info panel — docked in the right app-frame column (bottom sheet on phones)
@@ -227,6 +255,66 @@ export class ObjectPanel {
       if ((e as Error).name !== 'AbortError') {
         this.show(`<div style="color:#f99">SIMBAD unreachable — try again</div>${this.footer()}`);
         console.warn('identify failed', e);
+      }
+    }
+  }
+
+  // --- search autocomplete ---
+  private updateSuggest(): void {
+    this.suggestions = searchSuggest(this.input.value, 8);
+    this.highlight = -1;
+    if (!this.suggestions.length) {
+      this.hideSuggest();
+      return;
+    }
+    this.suggestBox.innerHTML = this.suggestions
+      .map(
+        (m, i) =>
+          `<div data-i="${i}" style="padding:7px 11px;cursor:pointer;font-size:13px;color:#dcebff;` +
+          `border-bottom:1px solid rgba(120,170,255,0.07)">${escapeHtml(m.label)}</div>`,
+      )
+      .join('');
+    const r = this.input.getBoundingClientRect();
+    this.suggestBox.style.left = `${r.left}px`;
+    this.suggestBox.style.top = `${r.bottom + 4}px`;
+    this.suggestBox.style.width = `${r.width}px`;
+    this.suggestBox.style.display = 'block';
+  }
+
+  private setHighlight(i: number): void {
+    this.highlight = i;
+    for (const el of this.suggestBox.querySelectorAll<HTMLElement>('[data-i]'))
+      el.style.background = Number(el.dataset.i) === i ? 'rgba(90,140,230,0.28)' : 'transparent';
+  }
+
+  private pickSuggest(i: number): void {
+    const s = this.suggestions[i];
+    if (!s) return;
+    this.input.value = s.query;
+    this.hideSuggest();
+    void this.onSearch(s.query);
+  }
+
+  private hideSuggest(): void {
+    this.suggestBox.style.display = 'none';
+    this.highlight = -1;
+  }
+
+  private onSearchKey(e: KeyboardEvent): void {
+    const open = this.suggestBox.style.display !== 'none' && this.suggestions.length > 0;
+    if (open && e.key === 'ArrowDown') {
+      e.preventDefault();
+      this.setHighlight((this.highlight + 1) % this.suggestions.length);
+    } else if (open && e.key === 'ArrowUp') {
+      e.preventDefault();
+      this.setHighlight((this.highlight - 1 + this.suggestions.length) % this.suggestions.length);
+    } else if (e.key === 'Escape') {
+      this.hideSuggest();
+    } else if (e.key === 'Enter') {
+      if (open && this.highlight >= 0) this.pickSuggest(this.highlight);
+      else {
+        this.hideSuggest();
+        void this.onSearch(this.input.value);
       }
     }
   }

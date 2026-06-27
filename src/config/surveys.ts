@@ -1,9 +1,10 @@
 /**
- * Survey registry. The base all-sky sphere uses an equirect texture (DSS2 / Mellinger,
- * vendored under public/textures/). High-resolution surveys have NO equirect texture — they
- * stream as HiPS tiles ON TOP of the DSS2 base when you zoom in, so any field composites
- * "DSS2 everywhere + the deepest survey that covers it". All HiPS params live-verified against
- * the CDS MocServer 2026-06-12.
+ * Survey registry. In atlas mode each entry is streamed directly as the Aladin Lite base image
+ * layer (smooth GPU HiPS pan/zoom); `target` flies a field/partial-coverage survey to a guaranteed-
+ * covered showcase field so you never land on empty sky. The two equirect `texture` entries
+ * (DSS2 / Mellinger, vendored under public/textures/) also back the Three.js 3D-mode sky sphere.
+ * All HiPS params live-verified against the CDS MocServer (base set 2026-06-12; the wide-field
+ * additions — SDSS, DESI, GALEX, Euclid — 2026-06-27), with `target` = each HiPS's hips_initial.
  */
 export interface SurveyEntry {
   id: string;
@@ -64,6 +65,30 @@ export const SURVEYS: SurveyEntry[] = [
     target: { raDeg: 161.26, decDeg: -59.68, fovDeg: 1.5 }, // Eta Carinae (southern galactic plane)
   },
   {
+    id: 'sdss',
+    name: 'SDSS',
+    texture: null,
+    attribution: 'SDSS DR9 · Sloan Digital Sky Survey · CDS HiPS',
+    hemisphere: 'north', // ~36% of sky (north galactic cap + stripes)
+    resolution: "0.4''",
+    hips: { base: `${ALASKY}/SDSS/DR9/color`, format: 'jpeg', maxOrder: 10 },
+    target: { raDeg: 202.4696, decDeg: 47.1953, fovDeg: 0.5 }, // M51 Whirlpool (SDSS hips_initial)
+  },
+  {
+    id: 'desi',
+    name: 'DESI Legacy',
+    texture: null,
+    attribution: 'DESI Legacy Imaging Surveys DR10 · NOIRLab/DOE/NSF · CDS HiPS',
+    hemisphere: 'all', // ~55% of sky (the deepest wide optical map)
+    resolution: "0.3''",
+    hips: {
+      base: `${ALASKY}/DESI-legacy-surveys/DR10/CDS_P_DESI-Legacy-Surveys_DR10_color`,
+      format: 'png',
+      maxOrder: 11,
+    },
+    target: { raDeg: 190.004, decDeg: -5.2893, fovDeg: 1.0 }, // DESI DR10 field (HiPS hips_initial)
+  },
+  {
     id: 'unwise',
     name: 'unWISE (IR)',
     texture: null,
@@ -71,6 +96,15 @@ export const SURVEYS: SurveyEntry[] = [
     hemisphere: 'all',
     resolution: "1.6''",
     hips: { base: `${ALASKY}/unWISE/color-W2-W1W2-W1`, format: 'jpeg', maxOrder: 8 },
+  },
+  {
+    id: 'galex',
+    name: 'GALEX (UV)',
+    texture: null,
+    attribution: 'GALEX GR6/7 ultraviolet · NASA/Caltech/JPL · CDS HiPS',
+    hemisphere: 'all', // ~79% of sky in the ultraviolet
+    resolution: "5''",
+    hips: { base: `${ALASKY}/GALEX/GALEXGR6_7_color`, format: 'png', maxOrder: 9 },
   },
   {
     id: 'rubin',
@@ -102,6 +136,19 @@ export const SURVEYS: SurveyEntry[] = [
     hips: { base: `${ALASKY}/JWST/CDS_P_JWST_Carina-Nebula_NIRCam`, format: 'png', maxOrder: 14 },
     target: { raDeg: 159.213, decDeg: -58.62, fovDeg: 0.12 }, // NIRCam Cosmic Cliffs (HiPS hips_initial)
   },
+  {
+    id: 'euclid',
+    name: 'Euclid',
+    texture: null,
+    attribution: 'Euclid Early Release Observations · ESA/Euclid/Euclid Consortium/NASA · CDS HiPS',
+    hemisphere: 'fields', // only the ERO showcase fields are public so far (not a survey footprint yet)
+    resolution: "0.1''",
+    hips: { base: `${ALASKY}/Euclid/ERO/CDS_P_Euclid_ERO_color`, format: 'png', maxOrder: 12 },
+    target: { raDeg: 86.6908, decDeg: 0.0792, fovDeg: 1.2 }, // Euclid ERO field (HiPS hips_initial)
+  },
+  // NOTE: the Nancy Grace Roman Space Telescope (wide-field IR survey) launches ~2027 — CDS hosts no
+  // Roman HiPS yet (MocServer ID=*Roman* returns nothing, checked 2026-06-27). Add an entry here once
+  // a public Roman HiPS exists; the wiring is already survey-agnostic.
   {
     id: 'mellinger',
     name: 'Milky Way',

@@ -51,7 +51,7 @@ web app, installs as **native iOS / Android apps**, works offline as a **PWA**, 
 Three pillars:
 
 1. **Interactive sky atlas.** Actual survey photography — a DSS2 colour all-sky base with deeper
-   surveys (Pan-STARRS, DES, DECaPS, unWISE, Rubin First Look, HST and JWST fields, Mellinger Milky
+   surveys (Pan-STARRS, DES, DECaPS, SDSS, DESI, unWISE, GALEX, Rubin, HST, JWST and Euclid fields, Mellinger Milky
    Way) streamed as **HiPS** tiles (the IVOA Hierarchical Progressive Survey standard) from CDS and
    rendered by **[Aladin Lite](https://aladin.cds.unistra.fr/)**, the same WebGL2 atlas engine
    observatory portals embed. Smooth GPU pan/zoom to telescope resolution, switch surveys, overlay
@@ -84,7 +84,7 @@ One codebase, two experiences — switch by toggle or `?mode=` URL, remembered p
 
 - **Interactive sky atlas (Aladin Lite)** — pan/zoom the whole night sky rendered from real telescope photography, with smooth GPU streaming.
 - **Streaming telescope-resolution zoom (HiPS)** — deeper image tiles stream in as you zoom, down to galaxies and nebulae.
-- **Multi-survey ladder** — DSS2 colour base + Pan-STARRS, DES, DECaPS, unWISE (IR), Rubin First Look, HST and JWST fields.
+- **Multi-survey ladder** — DSS2 colour base + Pan-STARRS, DES, DECaPS, SDSS, DESI Legacy Surveys, unWISE (IR), GALEX (UV), Rubin First Look, HST, JWST and Euclid fields (X-ray→UV→optical→IR). *(Roman is a future wide-field mission — no public sky imagery exists yet; it'll slot in once CDS hosts a HiPS.)*
 - **Survey switcher** — a wavelength-coloured chip strip; clicking a survey always flies you to a field it actually covers (Andromeda in Pan-STARRS, the JWST Cosmic Cliffs…), so you never land on empty sky.
 - **Atlas ⇄ 3D toggle** — one button swaps the imagery atlas for the Three.js flythrough/solar-system view; RA/Dec is carried across so the view stays continuous.
 - **Atlas overlays** — constellation figures, IAU boundaries, a Messier catalogue and a coordinate grid draw straight on the imagery; click the sky to identify what's there.
@@ -141,8 +141,8 @@ One codebase, two experiences — switch by toggle or `?mode=` URL, remembered p
 <details>
 <summary><b>Identify, search &amp; inspect</b></summary>
 
-- **Click or tap to identify anything** — solar-system body, then live transient, otherwise the nearest SIMBAD source.
-- **Search by name or coordinates** — “M31”, “Vega”, or a raw RA/Dec pair (via Sesame + SIMBAD).
+- **Click or tap to identify anything** — solar-system body, then live transient, otherwise the nearest SIMBAD source (works in both the atlas and 3D modes).
+- **Search with autocomplete** — recommendations appear as you type (planets, the brightest stars, all 110 Messier objects with common names, and famous deep-sky objects); arrow-keys/Enter or click to pick. Names/coordinates not in the list still resolve via Sesame + SIMBAD.
 - **Rich object info panel** — type, coordinates, magnitudes, spectral class, distance, proper motion, radial velocity, with links to SIMBAD and ESASky.
 - **Finder-chart cutouts** — a DSS2 thumbnail with centring reticle, N/E marks and a field-scaled bar, like a telescope finder.
 - **Angular-separation tool** — click two points for the great-circle angle in °/′/″, with a drawn, chainable arc.
@@ -304,8 +304,9 @@ usage rules. In short, with gratitude:
 
 - **CDS, Strasbourg** — **Aladin Lite v3** (the atlas engine, LGPL-3.0), HiPS tiles, hips2fits, SIMBAD, VizieR, Sesame, MocServer.
 - **ESA / Gaia / DPAC** — Gaia DR3 (the star distances); **astronexus** — the HYG database.
-- **STScI / DSS2**, **Pan-STARRS**, **DES**, **DECaPS / NOIRLab**, **unWISE**, **Rubin Observatory**,
-  **HST**, **JWST**, and the **Mellinger** Milky Way panorama — survey imagery.
+- **STScI / DSS2**, **Pan-STARRS**, **DES**, **DECaPS / NOIRLab**, **SDSS**, **DESI Legacy Surveys
+  (NOIRLab/DOE/NSF)**, **unWISE**, **GALEX (NASA/Caltech)**, **Rubin Observatory**, **HST**, **JWST**,
+  **Euclid (ESA/Euclid Consortium/NASA)**, and the **Mellinger** Milky Way panorama — survey imagery.
 - **ALeRCE** and **ANTARES (NOIRLab)** brokers — ZTF and Rubin/LSST alert streams; **AAVSO VSX** —
   the variable-star index.
 
